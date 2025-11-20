@@ -2,13 +2,18 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { registerWithEmail, loginWithEmail } from '@/lib/supabaseClient';
+import {
+  registerWithEmail,
+  loginWithEmail,
+  getUserType,
+  type UserType,
+} from '@/lib/supabase/auth';
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [userType, setUserType] = useState<'student' | 'admin'>('student');
+  const [userType, setUserType] = useState<UserType>('student');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -21,8 +26,12 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         // Login flow
-        const { user } = await loginWithEmail(email, password);
-        const userTypeFromMeta = user?.user_metadata?.user_type || 'student';
+        const { session } = await loginWithEmail({ email, password });
+        if (!session) {
+          setError('Login failed. Please try again.');
+          return;
+        }
+        const userTypeFromMeta = getUserType(session) || 'student';
         router.push(`/dashboard/${userTypeFromMeta}`);
       } else {
         // Register flow
@@ -31,8 +40,13 @@ export default function AuthPage() {
           setLoading(false);
           return;
         }
-        await registerWithEmail(email, password, userType);
-        router.push(`/dashboard/${userType}`);
+        const { session } = await registerWithEmail({ email, password, userType });
+        if (session) {
+          router.push(`/dashboard/${userType}`);
+        } else {
+          // Email confirmation required
+          setError('Registration successful! Please check your email to confirm your account.');
+        }
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred');
@@ -137,7 +151,7 @@ export default function AuthPage() {
                     name="userType"
                     value="student"
                     checked={userType === 'student'}
-                    onChange={(e) => setUserType(e.target.value as 'student' | 'admin')}
+                    onChange={(e) => setUserType(e.target.value as UserType)}
                     className="mr-2"
                   />
                   <span className="text-sm text-zinc-700 dark:text-zinc-300">Student</span>
@@ -148,7 +162,7 @@ export default function AuthPage() {
                     name="userType"
                     value="admin"
                     checked={userType === 'admin'}
-                    onChange={(e) => setUserType(e.target.value as 'student' | 'admin')}
+                    onChange={(e) => setUserType(e.target.value as UserType)}
                     className="mr-2"
                   />
                   <span className="text-sm text-zinc-700 dark:text-zinc-300">Admin</span>
