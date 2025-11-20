@@ -39,24 +39,6 @@ export interface AssignmentSubmission {
   actualHours?: number;
 }
 
-export interface StudyMetrics {
-  completionRate: number;
-  planningAccuracy: number;
-  priorityDistribution: {
-    high: number;
-    medium: number;
-    low: number;
-  };
-  weeklyProgress: Array<{
-    weekStart: string;
-    completed: number;
-    total: number;
-  }>;
-  courseProgress: Array<{
-    courseId: string;
-    completion: number;
-  }>;
-}
 
 /**
  * Calculate total study time from sessions
