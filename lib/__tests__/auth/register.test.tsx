@@ -75,7 +75,7 @@ describe('Register Flow', () => {
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const adminRadio = screen.getByLabelText(/admin/i);
-    const submitButton = screen.getByRole('button', { name: /register/i, hidden: true }).closest('form')?.querySelector('button[type="submit"]') as HTMLButtonElement || screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit');
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'admin@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -106,7 +106,7 @@ describe('Register Flow', () => {
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const studentRadio = screen.getByLabelText(/student/i);
-    const submitButton = screen.getByRole('button', { name: /register/i, hidden: true }).closest('form')?.querySelector('button[type="submit"]') as HTMLButtonElement || screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit');
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'student@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -134,7 +134,7 @@ describe('Register Flow', () => {
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const studentRadio = screen.getByLabelText(/student/i);
-    const submitButton = screen.getByRole('button', { name: /register/i, hidden: true }).closest('form')?.querySelector('button[type="submit"]') as HTMLButtonElement || screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit');
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'existing@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -162,7 +162,7 @@ describe('Register Flow', () => {
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const studentRadio = screen.getByLabelText(/student/i);
-    const submitButton = screen.getByRole('button', { name: /register/i, hidden: true }).closest('form')?.querySelector('button[type="submit"]') as HTMLButtonElement || screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit');
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'invalid-email');
     await userEvent.type(passwordInput, 'pass');
