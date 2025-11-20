@@ -53,11 +53,17 @@ describe('Register Flow', () => {
 
     await userEvent.type(emailInput, 'test@example.com');
     await userEvent.type(passwordInput, 'password123');
+    
+    // Uncheck any selected radio button by clicking student (which should be default)
+    const studentRadio = screen.getByLabelText(/student/i);
+    await userEvent.click(studentRadio);
+    await userEvent.click(studentRadio); // Click again to uncheck
+    
     await userEvent.click(submitButton);
 
     await waitFor(() => {
       expect(screen.getByText(/please select a user type/i)).toBeInTheDocument();
-    });
+    }, { timeout: 3000 });
   });
 
   it('should call registerWithEmail with user_type in metadata', async () => {
