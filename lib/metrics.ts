@@ -20,6 +20,26 @@ export interface StudyGoal {
   endDate: Date;
 }
 
+export interface Assignment {
+  id: string;
+  courseId: string;
+  title: string;
+  description?: string;
+  dueDate?: Date;
+  status: 'todo' | 'doing' | 'done';
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  status: 'not_started' | 'in_progress' | 'submitted' | 'graded';
+  estimatedHours?: number;
+  actualHours?: number;
+}
+
+
 /**
  * Calculate total study time from sessions
  */
@@ -229,5 +249,244 @@ export function calculateCompletionRate(sessions: StudySession[]): number {
   if (sessions.length === 0) return 0;
   const completedCount = sessions.filter((s) => s.completed).length;
   return (completedCount / sessions.length) * 100;
+}
+
+/**
+ * Calculate assignment completion rate based on submissions
+ */
+export function calculateAssignmentCompletionRate(
+  assignments: Assignment[],
+  submissions: AssignmentSubmission[]
+): number {
+  if (assignments.length === 0) return 0;
+
+  const completedSubmissions = submissions.filter(
+    (sub) => sub.status === 'submitted' || sub.status === 'graded'
+  );
+  const uniqueCompletedAssignments = new Set(
+    completedSubmissions.map((sub) => sub.assignmentId)
+  );
+
+  return (uniqueCompletedAssignments.size / assignments.length) * 100;
+}
+
+/**
+ * Calculate planning accuracy (how close estimated hours are to actual hours)
+ */
+export function calculatePlanningAccuracy(
+  submissions: AssignmentSubmission[]
+): number {
+  const submissionsWithBoth = submissions.filter(
+    (sub) =>
+      sub.estimatedHours !== undefined &&
+      sub.actualHours !== undefined &&
+      sub.estimatedHours > 0
+  );
+
+  if (submissionsWithBoth.length === 0) return 0;
+
+  const totalAccuracy = submissionsWithBoth.reduce((sum, sub) => {
+    const estimated = sub.estimatedHours!;
+    const actual = sub.actualHours!;
+    // Calculate accuracy as percentage: 100% - (difference percentage)
+    const difference = Math.abs(estimated - actual);
+    const accuracy = Math.max(0, 100 - (difference / estimated) * 100);
+    return sum + accuracy;
+  }, 0);
+
+  return totalAccuracy / submissionsWithBoth.length;
+}
+
+/**
+ * Calculate priority distribution of assignments
+ */
+export function calculatePriorityDistribution(assignments: Assignment[]): {
+  high: number;
+  medium: number;
+  low: number;
+} {
+  const distribution = {
+    high: 0,
+    medium: 0,
+    low: 0,
+  };
+
+  assignments.forEach((assignment) => {
+    distribution[assignment.priority]++;
+  });
+
+  return distribution;
+}
+
+/**
+ * Calculate weekly progress for assignments
+ */
+export function calculateWeeklyProgress(
+  assignments: Assignment[],
+  submissions: AssignmentSubmission[]
+): Array<{ weekStart: string; completed: number; total: number }> {
+  // Group assignments by week
+  const weekMap = new Map<string, { assignments: Assignment[]; completed: Set<string> }>();
+
+  assignments.forEach((assignment) => {
+    if (!assignment.dueDate) return;
+
+    const date = new Date(assignment.dueDate);
+    const weekStart = getWeekStart(date);
+    const weekKey = weekStart.toISOString().split('T')[0];
+
+    if (!weekMap.has(weekKey)) {
+      weekMap.set(weekKey, {
+        assignments: [],
+        completed: new Set(),
+      });
+    }
+
+    weekMap.get(weekKey)!.assignments.push(assignment);
+  });
+
+  // Mark completed assignments
+  submissions.forEach((submission) => {
+    if (submission.status === 'submitted' || submission.status === 'graded') {
+      const assignment = assignments.find((a) => a.id === submission.assignmentId);
+      if (assignment && assignment.dueDate) {
+        const date = new Date(assignment.dueDate);
+        const weekStart = getWeekStart(date);
+        const weekKey = weekStart.toISOString().split('T')[0];
+        const weekData = weekMap.get(weekKey);
+        if (weekData) {
+          weekData.completed.add(submission.assignmentId);
+        }
+      }
+    }
+  });
+
+  // Convert to array format
+  return Array.from(weekMap.entries())
+    .map(([weekStart, data]) => ({
+      weekStart,
+      completed: data.completed.size,
+      total: data.assignments.length,
+    }))
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+}
+
+/**
+ * Calculate progress per course
+ */
+export function calculateCourseProgress(
+  assignments: Assignment[],
+  submissions: AssignmentSubmission[]
+): Array<{ courseId: string; completion: number }> {
+  const courseMap = new Map<string, { total: number; completed: Set<string> }>();
+
+  // Count total assignments per course
+  assignments.forEach((assignment) => {
+    if (!courseMap.has(assignment.courseId)) {
+      courseMap.set(assignment.courseId, {
+        total: 0,
+        completed: new Set(),
+      });
+    }
+    courseMap.get(assignment.courseId)!.total++;
+  });
+
+  // Mark completed assignments
+  submissions.forEach((submission) => {
+    if (submission.status === 'submitted' || submission.status === 'graded') {
+      const assignment = assignments.find((a) => a.id === submission.assignmentId);
+      if (assignment) {
+        const courseData = courseMap.get(assignment.courseId);
+        if (courseData) {
+          courseData.completed.add(submission.assignmentId);
+        }
+      }
+    }
+  });
+
+  // Calculate completion percentage
+  return Array.from(courseMap.entries()).map(([courseId, data]) => {
+    const completion =
+      data.total === 0 ? 0 : (data.completed.size / data.total) * 100;
+    return { courseId, completion };
+  });
+}
+
+/**
+ * Get week start (Monday) for a given date
+ */
+function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+  return new Date(d.setDate(diff));
+}
+
+/**
+ * Get metrics interpretation with level, message, and recommendations
+ */
+export function getMetricsInterpretation(metrics: AssignmentMetrics): {
+  level: 'excellent' | 'good' | 'fair' | 'needs-improvement';
+  message: string;
+  recommendations: string[];
+} {
+  const { completionRate, planningAccuracy, priorityDistribution, weeklyProgress } = metrics;
+
+  let level: 'excellent' | 'good' | 'fair' | 'needs-improvement';
+  let message: string;
+  const recommendations: string[] = [];
+
+  // Determine level based on completion rate and planning accuracy
+  const avgScore = (completionRate + planningAccuracy) / 2;
+
+  if (avgScore >= 85) {
+    level = 'excellent';
+    message = 'You\'re doing great! Keep up the excellent work.';
+  } else if (avgScore >= 70) {
+    level = 'good';
+    message = 'You\'re on track! There\'s room for improvement.';
+  } else if (avgScore >= 50) {
+    level = 'fair';
+    message = 'You\'re making progress, but could benefit from better planning.';
+  } else {
+    level = 'needs-improvement';
+    message = 'Consider adjusting your study habits and planning strategies.';
+  }
+
+  // Generate recommendations based on metrics
+  if (completionRate < 70) {
+    recommendations.push('Focus on completing assignments on time to improve your completion rate.');
+  }
+
+  if (planningAccuracy < 70) {
+    recommendations.push('Work on better time estimation. Track actual vs estimated hours to improve accuracy.');
+  }
+
+  const highPriorityCount = priorityDistribution.high;
+  const totalAssignments = priorityDistribution.high + priorityDistribution.medium + priorityDistribution.low;
+  if (highPriorityCount > totalAssignments * 0.4 && totalAssignments > 0) {
+    recommendations.push('You have many high-priority assignments. Consider breaking them into smaller tasks.');
+  }
+
+  // Check for weeks with low completion
+  const recentWeeks = weeklyProgress.slice(-4);
+  const lowCompletionWeeks = recentWeeks.filter(
+    (week) => week.total > 0 && week.completed / week.total < 0.5
+  );
+  if (lowCompletionWeeks.length > 0) {
+    recommendations.push('Some recent weeks had low completion rates. Review your weekly planning strategy.');
+  }
+
+  // Check for courses with low progress
+  const lowProgressCourses = metrics.courseProgress.filter((cp) => cp.completion < 50);
+  if (lowProgressCourses.length > 0) {
+    recommendations.push(`Focus on improving progress in ${lowProgressCourses.length} course(s) with low completion.`);
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push('Continue maintaining your current study habits!');
+  }
+
+  return { level, message, recommendations };
 }
 
