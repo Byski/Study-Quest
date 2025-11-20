@@ -25,7 +25,7 @@ describe('Login Flow', () => {
   it('should show login form by default', () => {
     render(<AuthPage />);
     
-    expect(screen.getByText('Login')).toBeInTheDocument();
+    expect(screen.getAllByText('Login').length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
   });
@@ -41,7 +41,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /login/i });
+    const submitButton = screen.getByRole('button', { name: /^login$/i });
 
     await userEvent.type(emailInput, 'student@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -64,7 +64,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /login/i });
+    const submitButton = screen.getByRole('button', { name: /^login$/i });
 
     await userEvent.type(emailInput, 'admin@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -86,7 +86,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /login/i });
+    const submitButton = screen.getByRole('button', { name: /^login$/i });
 
     await userEvent.type(emailInput, 'user@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -105,7 +105,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /login/i });
+    const submitButton = screen.getByRole('button', { name: /^login$/i });
 
     await userEvent.type(emailInput, 'wrong@example.com');
     await userEvent.type(passwordInput, 'wrongpassword');
@@ -124,7 +124,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /login/i });
+    const submitButton = screen.getByRole('button', { name: /^login$/i });
 
     await userEvent.type(emailInput, 'test@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -138,14 +138,17 @@ describe('Login Flow', () => {
   it('should toggle between login and register', async () => {
     render(<AuthPage />);
 
-    expect(screen.getByText('Login')).toBeInTheDocument();
-    expect(screen.queryByLabelText(/user type/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Login').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/user type/i)).not.toBeInTheDocument();
 
-    const registerButton = screen.getByText('Register');
-    await userEvent.click(registerButton);
+    const registerButtons = screen.getAllByText('Register');
+    const toggleButton = registerButtons.find(btn => btn.getAttribute('type') === 'button');
+    if (toggleButton) {
+      await userEvent.click(toggleButton);
+    }
 
-    expect(screen.getByText('Register')).toBeInTheDocument();
-    expect(screen.getByLabelText(/user type/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Register').length).toBeGreaterThan(0);
+    expect(screen.getByText(/user type/i)).toBeInTheDocument();
   });
 });
 

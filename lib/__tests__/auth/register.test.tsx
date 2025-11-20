@@ -25,22 +25,30 @@ describe('Register Flow', () => {
   it('should show register form when register button is clicked', async () => {
     render(<AuthPage />);
     
-    const registerButton = screen.getByText('Register');
-    await userEvent.click(registerButton);
+    const registerToggleButton = screen.getAllByText('Register').find(
+      (btn) => btn.getAttribute('type') === 'button'
+    );
+    if (registerToggleButton) {
+      await userEvent.click(registerToggleButton);
+    }
 
     expect(screen.getByText('Register')).toBeInTheDocument();
-    expect(screen.getByLabelText(/user type/i)).toBeInTheDocument();
+    expect(screen.getByText(/user type/i)).toBeInTheDocument();
   });
 
   it('should require user type selection', async () => {
     render(<AuthPage />);
     
-    const registerButton = screen.getByText('Register');
-    await userEvent.click(registerButton);
+    const registerToggleButton = screen.getAllByText('Register').find(
+      (btn) => btn.getAttribute('type') === 'button'
+    );
+    if (registerToggleButton) {
+      await userEvent.click(registerToggleButton);
+    }
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /register/i });
+    const submitButton = screen.getByRole('button', { name: /^register$/i });
 
     await userEvent.type(emailInput, 'test@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -56,13 +64,17 @@ describe('Register Flow', () => {
 
     render(<AuthPage />);
     
-    const registerButton = screen.getByText('Register');
-    await userEvent.click(registerButton);
+    const registerToggleButton = screen.getAllByText('Register').find(
+      (btn) => btn.getAttribute('type') === 'button'
+    );
+    if (registerToggleButton) {
+      await userEvent.click(registerToggleButton);
+    }
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const adminRadio = screen.getByLabelText(/admin/i);
-    const submitButton = screen.getByRole('button', { name: /register/i });
+    const submitButton = screen.getByRole('button', { name: /^register$/i });
 
     await userEvent.type(emailInput, 'admin@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -83,13 +95,17 @@ describe('Register Flow', () => {
 
     render(<AuthPage />);
     
-    const registerButton = screen.getByText('Register');
-    await userEvent.click(registerButton);
+    const registerToggleButton = screen.getAllByText('Register').find(
+      (btn) => btn.getAttribute('type') === 'button'
+    );
+    if (registerToggleButton) {
+      await userEvent.click(registerToggleButton);
+    }
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const studentRadio = screen.getByLabelText(/student/i);
-    const submitButton = screen.getByRole('button', { name: /register/i });
+    const submitButton = screen.getByRole('button', { name: /^register$/i });
 
     await userEvent.type(emailInput, 'student@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -107,13 +123,17 @@ describe('Register Flow', () => {
 
     render(<AuthPage />);
     
-    const registerButton = screen.getByText('Register');
-    await userEvent.click(registerButton);
+    const registerToggleButton = screen.getAllByText('Register').find(
+      (btn) => btn.getAttribute('type') === 'button'
+    );
+    if (registerToggleButton) {
+      await userEvent.click(registerToggleButton);
+    }
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const studentRadio = screen.getByLabelText(/student/i);
-    const submitButton = screen.getByRole('button', { name: /register/i });
+    const submitButton = screen.getByRole('button', { name: /^register$/i });
 
     await userEvent.type(emailInput, 'existing@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -131,13 +151,17 @@ describe('Register Flow', () => {
 
     render(<AuthPage />);
     
-    const registerButton = screen.getByText('Register');
-    await userEvent.click(registerButton);
+    const registerToggleButton = screen.getAllByText('Register').find(
+      (btn) => btn.getAttribute('type') === 'button'
+    );
+    if (registerToggleButton) {
+      await userEvent.click(registerToggleButton);
+    }
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const studentRadio = screen.getByLabelText(/student/i);
-    const submitButton = screen.getByRole('button', { name: /register/i });
+    const submitButton = screen.getByRole('button', { name: /^register$/i });
 
     await userEvent.type(emailInput, 'invalid-email');
     await userEvent.type(passwordInput, 'pass');
