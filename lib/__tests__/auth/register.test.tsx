@@ -83,8 +83,8 @@ describe('Register Flow', () => {
     const adminRadio = screen.getByLabelText(/admin/i);
     await user.click(adminRadio);
 
-    // Submit
-    const submitButton = screen.getByRole('button', { name: /register/i });
+    // Submit (use type="submit" to get the form submit button)
+    const submitButton = screen.getByRole('button', { type: 'submit' });
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -151,7 +151,7 @@ describe('Register Flow', () => {
     await user.type(screen.getByLabelText(/email/i), 'invalid-email');
     await user.type(screen.getByLabelText(/password/i), '123');
     
-    const submitButton = screen.getByRole('button', { name: /register/i });
+    const submitButton = screen.getByRole('button', { type: 'submit' });
     await user.click(submitButton);
 
     await waitFor(() => {
