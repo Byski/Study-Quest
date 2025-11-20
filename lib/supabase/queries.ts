@@ -171,3 +171,17 @@ export async function createCourse(course: CourseInsert): Promise<Course> {
   return data;
 }
 
+/**
+ * Get all courses for a user (as owner)
+ */
+export async function getCourses(userId: string): Promise<Course[]> {
+  const { data, error } = await supabase
+    .from('courses')
+    .select('*')
+    .eq('owner_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+

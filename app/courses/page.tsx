@@ -4,14 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/supabase/auth';
+import { getCourses } from '@/lib/supabase/queries';
+import type { Database } from '@/lib/types/database.types';
 
-interface Course {
-  id: string;
-  name: string;
-  code: string | null;
-  color: string | null;
-  created_at: string;
-}
+type Course = Database['public']['Tables']['courses']['Row'];
 
 export default function CoursesPage() {
   const [loading, setLoading] = useState(true);
@@ -28,8 +24,8 @@ export default function CoursesPage() {
           return;
         }
 
-        // TODO: Load courses from Supabase (SCRUM-11 functionality commit)
-        setCourses([]);
+        const userCourses = await getCourses(session.user.id);
+        setCourses(userCourses);
       } catch (err: any) {
         setError(err.message || 'Failed to load courses');
       } finally {
