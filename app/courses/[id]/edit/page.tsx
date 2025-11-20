@@ -21,6 +21,8 @@ export default function EditCoursePage() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     async function loadCourse() {
@@ -238,6 +240,52 @@ export default function EditCoursePage() {
             </button>
           </div>
         </form>
+
+        {/* Delete Section */}
+        <div className="mt-6 rounded-lg border border-red-200 bg-white p-6 shadow-sm dark:border-red-900 dark:bg-zinc-900">
+          <h2 className="mb-2 text-lg font-semibold text-red-600 dark:text-red-400">
+            Danger Zone
+          </h2>
+          <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+            Once you delete a course, there is no going back. Please be certain.
+          </p>
+          {!showDeleteConfirm ? (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            >
+              Delete Course
+            </button>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-red-600 dark:text-red-400">
+                Are you sure you want to delete this course? This action cannot be undone.
+              </p>
+              <div className="flex gap-4">
+                <button
+                  onClick={async () => {
+                    // TODO: Delete course functionality (SCRUM-13 functionality commit)
+                    console.log('Delete course:', courseId);
+                  }}
+                  disabled={deleting}
+                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleting ? 'Deleting...' : 'Yes, Delete Course'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setError(null);
+                  }}
+                  disabled={deleting}
+                  className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
