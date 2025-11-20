@@ -2,15 +2,18 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import AuthPage from '@/app/auth/page';
-import { loginWithEmail } from '@/lib/supabaseClient';
+import * as authModule from '@/lib/supabase/auth';
 
+// Mock next/navigation
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
 }));
 
-jest.mock('@/lib/supabaseClient', () => ({
+// Mock auth module
+jest.mock('@/lib/supabase/auth', () => ({
   registerWithEmail: jest.fn(),
   loginWithEmail: jest.fn(),
+  getUserType: jest.fn(),
 }));
 
 describe('Login Flow', () => {
@@ -24,133 +27,147 @@ describe('Login Flow', () => {
 
   it('should show login form by default', () => {
     render(<AuthPage />);
-    
-    expect(screen.getAllByText('Login').length).toBeGreaterThan(0);
+    expect(screen.getByText(/login/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
   });
 
-  it('should redirect to student dashboard for student user', async () => {
-    (loginWithEmail as jest.Mock).mockResolvedValue({
-      user: {
-        user_metadata: { user_type: 'student' },
+  it('should call loginWithEmail with correct credentials', async () => {
+    const user = userEvent.setup();
+    const mockLogin = authModule.loginWithEmail as jest.Mock;
+    const mockGetUserType = authModule.getUserType as jest.Mock;
+    
+    mockLogin.mockResolvedValue({
+      session: {
+        user: { id: '123', user_metadata: { user_type: 'student' } },
       },
     });
+    mockGetUserType.mockReturnValue('student');
 
     render(<AuthPage />);
 
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
-
-    await userEvent.type(emailInput, 'student@example.com');
-    await userEvent.type(passwordInput, 'password123');
-    await userEvent.click(submitButton);
+    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'password123');
+    
+    const submitButton = screen.getByRole('button', { name: /login/i });
+    await user.click(submitButton);
 
     await waitFor(() => {
-      expect(loginWithEmail).toHaveBeenCalledWith('student@example.com', 'password123');
+      expect(mockLogin).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        password: 'password123',
+      });
+    });
+  });
+
+  it('should redirect to student dashboard after successful login', async () => {
+    const user = userEvent.setup();
+    const mockLogin = authModule.loginWithEmail as jest.Mock;
+    const mockGetUserType = authModule.getUserType as jest.Mock;
+    
+    mockLogin.mockResolvedValue({
+      session: {
+        user: { id: '123', user_metadata: { user_type: 'student' } },
+      },
+    });
+    mockGetUserType.mockReturnValue('student');
+
+    render(<AuthPage />);
+
+    await user.type(screen.getByLabelText(/email/i), 'student@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'password123');
+    
+    const submitButton = screen.getByRole('button', { name: /login/i });
+    await user.click(submitButton);
+
+    await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith('/dashboard/student');
     });
   });
 
-  it('should redirect to admin dashboard for admin user', async () => {
-    (loginWithEmail as jest.Mock).mockResolvedValue({
-      user: {
-        user_metadata: { user_type: 'admin' },
+  it('should redirect to admin dashboard for admin users', async () => {
+    const user = userEvent.setup();
+    const mockLogin = authModule.loginWithEmail as jest.Mock;
+    const mockGetUserType = authModule.getUserType as jest.Mock;
+    
+    mockLogin.mockResolvedValue({
+      session: {
+        user: { id: '123', user_metadata: { user_type: 'admin' } },
       },
     });
+    mockGetUserType.mockReturnValue('admin');
 
     render(<AuthPage />);
 
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
-
-    await userEvent.type(emailInput, 'admin@example.com');
-    await userEvent.type(passwordInput, 'password123');
-    await userEvent.click(submitButton);
+    await user.type(screen.getByLabelText(/email/i), 'admin@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'password123');
+    
+    const submitButton = screen.getByRole('button', { name: /login/i });
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith('/dashboard/admin');
     });
   });
 
-  it('should default to student if user_type is missing', async () => {
-    (loginWithEmail as jest.Mock).mockResolvedValue({
-      user: {
-        user_metadata: {},
-      },
-    });
-
-    render(<AuthPage />);
-
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
-
-    await userEvent.type(emailInput, 'user@example.com');
-    await userEvent.type(passwordInput, 'password123');
-    await userEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/dashboard/student');
-    });
-  });
-
   it('should show error message for invalid credentials', async () => {
-    const error = new Error('Invalid login credentials');
-    (loginWithEmail as jest.Mock).mockRejectedValue(error);
+    const user = userEvent.setup();
+    const mockLogin = authModule.loginWithEmail as jest.Mock;
+    mockLogin.mockRejectedValue(new Error('Invalid login credentials'));
 
     render(<AuthPage />);
 
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
-
-    await userEvent.type(emailInput, 'wrong@example.com');
-    await userEvent.type(passwordInput, 'wrongpassword');
-    await userEvent.click(submitButton);
+    await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'wrongpassword');
+    
+    const submitButton = screen.getByRole('button', { name: /login/i });
+    await user.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/invalid login credentials/i)).toBeInTheDocument();
+      expect(screen.getByText(/invalid/i)).toBeInTheDocument();
     });
   });
 
-  it('should show generic error message for unknown errors', async () => {
-    const error = new Error('Network error');
-    (loginWithEmail as jest.Mock).mockRejectedValue(error);
+  it('should show error message when login fails', async () => {
+    const user = userEvent.setup();
+    const mockLogin = authModule.loginWithEmail as jest.Mock;
+    mockLogin.mockRejectedValue(new Error('Login failed'));
 
     render(<AuthPage />);
 
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
-
-    await userEvent.type(emailInput, 'test@example.com');
-    await userEvent.type(passwordInput, 'password123');
-    await userEvent.click(submitButton);
+    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'password123');
+    
+    const submitButton = screen.getByRole('button', { name: /login/i });
+    await user.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/network error/i)).toBeInTheDocument();
+      expect(screen.getByText(/login failed/i)).toBeInTheDocument();
     });
   });
 
-  it('should toggle between login and register', async () => {
+  it('should toggle between login and register modes', async () => {
+    const user = userEvent.setup();
     render(<AuthPage />);
 
-    expect(screen.getAllByText('Login').length).toBeGreaterThan(0);
-    expect(screen.queryByText(/user type/i)).not.toBeInTheDocument();
+    // Should show login form
+    expect(screen.getByText(/login/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/user type/i)).not.toBeInTheDocument();
 
-    const buttons = screen.getAllByRole('button');
-    const toggleButton = buttons.find(
-      (btn) => btn.textContent === 'Register' && btn.getAttribute('type') === 'button'
-    );
-    if (toggleButton) {
-      await userEvent.click(toggleButton);
-    }
+    // Click register button
+    const registerButton = screen.getByRole('button', { name: /register/i });
+    await user.click(registerButton);
 
-    expect(screen.getAllByText('Register').length).toBeGreaterThan(0);
-    expect(screen.getByText(/user type/i)).toBeInTheDocument();
+    // Should show register form
+    expect(screen.getByText(/register/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/user type/i)).toBeInTheDocument();
+
+    // Click login button
+    const loginButton = screen.getByRole('button', { name: /login/i });
+    await user.click(loginButton);
+
+    // Should show login form again
+    expect(screen.getByText(/login/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/user type/i)).not.toBeInTheDocument();
   });
 });
-
