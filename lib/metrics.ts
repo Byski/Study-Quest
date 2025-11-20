@@ -443,7 +443,7 @@ function getWeekStart(date: Date): Date {
 /**
  * Get metrics interpretation with level, message, and recommendations
  */
-export function getMetricsInterpretation(metrics: StudyMetrics): {
+export function getMetricsInterpretation(metrics: AssignmentMetrics): {
   level: 'excellent' | 'good' | 'fair' | 'needs-improvement';
   message: string;
   recommendations: string[];
