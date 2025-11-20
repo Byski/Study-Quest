@@ -185,3 +185,40 @@ export async function getCourses(userId: string): Promise<Course[]> {
   return data || [];
 }
 
+/**
+ * Get a single course by ID
+ */
+export async function getCourseById(id: string): Promise<Course | null> {
+  const { data, error } = await supabase
+    .from('courses')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * Update a course
+ */
+export async function updateCourse(
+  id: string,
+  updates: CourseUpdate
+): Promise<Course> {
+  const { data, error } = await supabase
+    .from('courses')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
