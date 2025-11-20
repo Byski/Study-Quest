@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getSession, logout } from '@/lib/supabaseClient';
+import { getSession, logout, getUserType } from '@/lib/supabase/auth';
 
 export default function DashboardPage({
   params,
@@ -22,7 +22,7 @@ export default function DashboardPage({
           return;
         }
 
-        const userTypeFromMeta = session.user?.user_metadata?.user_type || 'student';
+        const userTypeFromMeta = getUserType(session) || 'student';
         
         // Redirect if userType doesn't match
         if (userTypeFromMeta !== params.userType) {
