@@ -164,3 +164,70 @@ export function calculateStudyStreak(sessions: StudySession[]): number {
   return streak;
 }
 
+/**
+ * Calculate study time for today
+ */
+export function calculateTodayStudyTime(sessions: StudySession[]): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return calculateStudyTimeInRange(sessions, today, tomorrow);
+}
+
+/**
+ * Calculate study time for this week
+ */
+export function calculateThisWeekStudyTime(sessions: StudySession[]): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayOfWeek = today.getDay();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - dayOfWeek);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  return calculateStudyTimeInRange(sessions, startOfWeek, endOfWeek);
+}
+
+/**
+ * Calculate study time for this month
+ */
+export function calculateThisMonthStudyTime(sessions: StudySession[]): number {
+  const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  endOfMonth.setHours(23, 59, 59, 999);
+
+  return calculateStudyTimeInRange(sessions, startOfMonth, endOfMonth);
+}
+
+/**
+ * Get the most studied subject
+ */
+export function getMostStudiedSubject(
+  sessions: StudySession[]
+): { subject: string; minutes: number } | null {
+  const timeBySubject = calculateStudyTimeBySubject(sessions);
+  const subjects = Object.entries(timeBySubject);
+
+  if (subjects.length === 0) return null;
+
+  const [subject, minutes] = subjects.reduce((max, current) =>
+    current[1] > max[1] ? current : max
+  );
+
+  return { subject, minutes };
+}
+
+/**
+ * Calculate completion rate (percentage of completed sessions)
+ */
+export function calculateCompletionRate(sessions: StudySession[]): number {
+  if (sessions.length === 0) return 0;
+  const completedCount = sessions.filter((s) => s.completed).length;
+  return (completedCount / sessions.length) * 100;
+}
+
