@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { getSession } from '@/lib/supabase/auth';
-import { getCourseById, updateCourse } from '@/lib/supabase/queries';
+import { getCourseById, updateCourse, deleteCourse } from '@/lib/supabase/queries';
 import type { Database } from '@/lib/types/database.types';
 
 type Course = Database['public']['Tables']['courses']['Row'];
@@ -264,8 +264,20 @@ export default function EditCoursePage() {
               <div className="flex gap-4">
                 <button
                   onClick={async () => {
-                    // TODO: Delete course functionality (SCRUM-13 functionality commit)
-                    console.log('Delete course:', courseId);
+                    setDeleting(true);
+                    setError(null);
+
+                    try {
+                      await deleteCourse(courseId);
+                      setSuccessMessage('Course deleted successfully!');
+                      setTimeout(() => {
+                        router.push('/courses');
+                      }, 1500);
+                    } catch (err: any) {
+                      setError(err.message || 'Failed to delete course');
+                      setDeleting(false);
+                      setShowDeleteConfirm(false);
+                    }
                   }}
                   disabled={deleting}
                   className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
