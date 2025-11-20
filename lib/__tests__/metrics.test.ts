@@ -5,6 +5,11 @@ import {
   calculateGoalProgress,
   calculateAverageSessionDuration,
   calculateStudyStreak,
+  calculateTodayStudyTime,
+  calculateThisWeekStudyTime,
+  calculateThisMonthStudyTime,
+  getMostStudiedSubject,
+  calculateCompletionRate,
   type StudySession,
   type StudyGoal,
 } from '../metrics';
@@ -222,6 +227,131 @@ describe('calculateStudyStreak', () => {
       { id: '1', duration: 30, subject: 'Math', date: new Date('2024-01-01'), completed: true },
     ];
     expect(calculateStudyStreak(sessions)).toBe(0);
+  });
+});
+
+describe('calculateTodayStudyTime', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('should return 0 for empty array', () => {
+    expect(calculateTodayStudyTime([])).toBe(0);
+  });
+
+  it('should calculate study time for today only', () => {
+    jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
+    
+    const sessions: StudySession[] = [
+      { id: '1', duration: 30, subject: 'Math', date: new Date('2024-01-15'), completed: true },
+      { id: '2', duration: 45, subject: 'Science', date: new Date('2024-01-15'), completed: true },
+      { id: '3', duration: 20, subject: 'English', date: new Date('2024-01-14'), completed: true },
+    ];
+    expect(calculateTodayStudyTime(sessions)).toBe(75);
+  });
+});
+
+describe('calculateThisWeekStudyTime', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('should return 0 for empty array', () => {
+    expect(calculateThisWeekStudyTime([])).toBe(0);
+  });
+
+  it('should calculate study time for current week', () => {
+    // Mock Monday, Jan 15, 2024
+    jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
+    
+    const sessions: StudySession[] = [
+      { id: '1', duration: 30, subject: 'Math', date: new Date('2024-01-15'), completed: true }, // Monday
+      { id: '2', duration: 45, subject: 'Science', date: new Date('2024-01-16'), completed: true }, // Tuesday
+      { id: '3', duration: 20, subject: 'English', date: new Date('2024-01-14'), completed: true }, // Sunday (previous week)
+    ];
+    expect(calculateThisWeekStudyTime(sessions)).toBe(75);
+  });
+});
+
+describe('calculateThisMonthStudyTime', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('should return 0 for empty array', () => {
+    expect(calculateThisMonthStudyTime([])).toBe(0);
+  });
+
+  it('should calculate study time for current month', () => {
+    jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
+    
+    const sessions: StudySession[] = [
+      { id: '1', duration: 30, subject: 'Math', date: new Date('2024-01-10'), completed: true },
+      { id: '2', duration: 45, subject: 'Science', date: new Date('2024-01-20'), completed: true },
+      { id: '3', duration: 20, subject: 'English', date: new Date('2023-12-31'), completed: true },
+    ];
+    expect(calculateThisMonthStudyTime(sessions)).toBe(75);
+  });
+});
+
+describe('getMostStudiedSubject', () => {
+  it('should return null for empty array', () => {
+    expect(getMostStudiedSubject([])).toBeNull();
+  });
+
+  it('should return the subject with most study time', () => {
+    const sessions: StudySession[] = [
+      { id: '1', duration: 30, subject: 'Math', date: new Date(), completed: true },
+      { id: '2', duration: 45, subject: 'Math', date: new Date(), completed: true },
+      { id: '3', duration: 20, subject: 'Science', date: new Date(), completed: true },
+    ];
+    const result = getMostStudiedSubject(sessions);
+    expect(result).toEqual({ subject: 'Math', minutes: 75 });
+  });
+
+  it('should handle ties by returning the first one encountered', () => {
+    const sessions: StudySession[] = [
+      { id: '1', duration: 30, subject: 'Math', date: new Date(), completed: true },
+      { id: '2', duration: 30, subject: 'Science', date: new Date(), completed: true },
+    ];
+    const result = getMostStudiedSubject(sessions);
+    expect(result).not.toBeNull();
+    expect(result?.minutes).toBe(30);
+  });
+});
+
+describe('calculateCompletionRate', () => {
+  it('should return 0 for empty array', () => {
+    expect(calculateCompletionRate([])).toBe(0);
+  });
+
+  it('should calculate completion rate correctly', () => {
+    const sessions: StudySession[] = [
+      { id: '1', duration: 30, subject: 'Math', date: new Date(), completed: true },
+      { id: '2', duration: 45, subject: 'Science', date: new Date(), completed: true },
+      { id: '3', duration: 20, subject: 'English', date: new Date(), completed: false },
+    ];
+    expect(calculateCompletionRate(sessions)).toBeCloseTo(66.67, 1);
+  });
+
+  it('should return 100 for all completed sessions', () => {
+    const sessions: StudySession[] = [
+      { id: '1', duration: 30, subject: 'Math', date: new Date(), completed: true },
+      { id: '2', duration: 45, subject: 'Science', date: new Date(), completed: true },
+    ];
+    expect(calculateCompletionRate(sessions)).toBe(100);
   });
 });
 
