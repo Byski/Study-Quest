@@ -275,7 +275,7 @@ describe('calculateThisWeekStudyTime', () => {
     const sessions: StudySession[] = [
       { id: '1', duration: 30, subject: 'Math', date: new Date('2024-01-15'), completed: true }, // Monday
       { id: '2', duration: 45, subject: 'Science', date: new Date('2024-01-16'), completed: true }, // Tuesday
-      { id: '3', duration: 20, subject: 'English', date: new Date('2024-01-14'), completed: true }, // Sunday (previous week)
+      { id: '3', duration: 20, subject: 'English', date: new Date('2024-01-07'), completed: true }, // Previous week
     ];
     expect(calculateThisWeekStudyTime(sessions)).toBe(75);
   });
