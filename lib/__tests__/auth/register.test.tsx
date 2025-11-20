@@ -49,7 +49,7 @@ describe('Register Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /register/i, hidden: true }).closest('form')?.querySelector('button[type="submit"]') as HTMLButtonElement || screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit');
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'test@example.com');
     await userEvent.type(passwordInput, 'password123');
