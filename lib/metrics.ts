@@ -1,492 +1,235 @@
-/**
- * Metrics calculation functions
- * Pure TypeScript functions for calculating study metrics
- */
+// Metrics tracking and calculation utilities
 
-export interface StudySession {
-  id: string;
-  duration: number; // in minutes
-  subject: string;
-  date: Date;
-  completed: boolean;
-}
-
-export interface StudyGoal {
-  id: string;
-  subject: string;
-  targetHours: number;
-  period: 'daily' | 'weekly' | 'monthly';
-  startDate: Date;
-  endDate: Date;
-}
-
-export interface Assignment {
-  id: string;
-  courseId: string;
-  title: string;
-  description?: string;
-  dueDate?: Date;
-  status: 'todo' | 'doing' | 'done';
-  priority: 'high' | 'medium' | 'low';
-}
-
-export interface AssignmentSubmission {
-  id: string;
-  assignmentId: string;
-  studentId: string;
-  status: 'not_started' | 'in_progress' | 'submitted' | 'graded';
-  estimatedHours?: number;
-  actualHours?: number;
-}
-
-
-/**
- * Calculate total study time from sessions
- */
-export function calculateTotalStudyTime(sessions: StudySession[]): number {
-  return sessions
-    .filter((session) => session.completed)
-    .reduce((total, session) => total + session.duration, 0);
-}
-
-/**
- * Calculate study time by subject
- */
-export function calculateStudyTimeBySubject(
-  sessions: StudySession[]
-): Record<string, number> {
-  return sessions
-    .filter((session) => session.completed)
-    .reduce((acc, session) => {
-      const subject = session.subject;
-      acc[subject] = (acc[subject] || 0) + session.duration;
-      return acc;
-    }, {} as Record<string, number>);
-}
-
-/**
- * Calculate study time for a specific date range
- */
-export function calculateStudyTimeInRange(
-  sessions: StudySession[],
-  startDate: Date,
-  endDate: Date
-): number {
-  return sessions
-    .filter((session) => {
-      const sessionDate = new Date(session.date);
-      return (
-        session.completed &&
-        sessionDate >= startDate &&
-        sessionDate <= endDate
-      );
-    })
-    .reduce((total, session) => total + session.duration, 0);
-}
-
-/**
- * Calculate goal progress percentage
- */
-export function calculateGoalProgress(
-  goal: StudyGoal,
-  sessions: StudySession[]
-): number {
-  const targetMinutes = goal.targetHours * 60;
-  const relevantSessions = sessions.filter((session) => {
-    const sessionDate = new Date(session.date);
-    return (
-      session.completed &&
-      session.subject === goal.subject &&
-      sessionDate >= goal.startDate &&
-      sessionDate <= goal.endDate
-    );
-  });
-
-  const actualMinutes = relevantSessions.reduce(
-    (total, session) => total + session.duration,
-    0
-  );
-
-  return Math.min((actualMinutes / targetMinutes) * 100, 100);
-}
-
-/**
- * Calculate average study session duration
- */
-export function calculateAverageSessionDuration(
-  sessions: StudySession[]
-): number {
-  const completedSessions = sessions.filter((session) => session.completed);
-  if (completedSessions.length === 0) return 0;
-
-  const totalDuration = completedSessions.reduce(
-    (total, session) => total + session.duration,
-    0
-  );
-  return totalDuration / completedSessions.length;
-}
-
-/**
- * Calculate study streak (consecutive days with study sessions)
- */
-export function calculateStudyStreak(sessions: StudySession[]): number {
-  const completedSessions = sessions
-    .filter((session) => session.completed)
-    .map((session) => {
-      const date = new Date(session.date);
-      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    });
-
-  if (completedSessions.length === 0) return 0;
-
-  // Get unique dates and sort them
-  const uniqueDates = Array.from(
-    new Set(completedSessions.map((date) => date.getTime()))
-  )
-    .map((time) => new Date(time))
-    .sort((a, b) => b.getTime() - a.getTime());
-
-  let streak = 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Check if today or yesterday has a session
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const hasToday = uniqueDates.some(
-    (date) => date.getTime() === today.getTime()
-  );
-  const hasYesterday = uniqueDates.some(
-    (date) => date.getTime() === yesterday.getTime()
-  );
-
-  if (!hasToday && !hasYesterday) return 0;
-
-  // Start counting from today or yesterday
-  let currentDate = hasToday ? new Date(today) : new Date(yesterday);
-  let dateIndex = 0;
-
-  while (dateIndex < uniqueDates.length) {
-    const checkDate = uniqueDates[dateIndex];
-    if (checkDate.getTime() === currentDate.getTime()) {
-      streak++;
-      currentDate.setDate(currentDate.getDate() - 1);
-      dateIndex++;
-    } else if (checkDate.getTime() < currentDate.getTime()) {
-      // Gap found, streak broken
-      break;
-    } else {
-      dateIndex++;
-    }
+export interface StudyMetrics {
+  totalAssignments: number
+  completedAssignments: number
+  inProgressAssignments: number
+  overdueAssignments: number
+  completionRate: number
+  averageAccuracy: number
+  totalEstimatedHours: number
+  totalActualHours: number
+  timeDifference: number
+  accuracyPercentage: number
+  priorityDistribution: {
+    high: number
+    medium: number
+    low: number
   }
-
-  return streak;
+  weeklyProgress: {
+    week: string
+    completed: number
+    estimatedHours: number
+    actualHours: number
+  }[]
+  courseProgress: {
+    courseId: string
+    courseTitle: string
+    assignmentsCompleted: number
+    assignmentsTotal: number
+    progressPercentage: number
+  }[]
 }
 
-/**
- * Calculate study time for today
- */
-export function calculateTodayStudyTime(sessions: StudySession[]): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  return calculateStudyTimeInRange(sessions, today, tomorrow);
+export interface AssignmentWithSubmission {
+  id: string
+  title: string
+  due_date: string | null
+  status: string
+  estimated_hours?: number | null
+  actual_hours?: number | null
+  priority?: 'high' | 'medium' | 'low' | null
+  course_id: string
+  courses?: {
+    id: string
+    title: string
+  }
 }
 
-/**
- * Calculate study time for this week
- */
-export function calculateThisWeekStudyTime(sessions: StudySession[]): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayOfWeek = today.getDay();
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - dayOfWeek);
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-  endOfWeek.setHours(23, 59, 59, 999);
-
-  return calculateStudyTimeInRange(sessions, startOfWeek, endOfWeek);
-}
-
-/**
- * Calculate study time for this month
- */
-export function calculateThisMonthStudyTime(sessions: StudySession[]): number {
-  const today = new Date();
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  endOfMonth.setHours(23, 59, 59, 999);
-
-  return calculateStudyTimeInRange(sessions, startOfMonth, endOfMonth);
-}
-
-/**
- * Get the most studied subject
- */
-export function getMostStudiedSubject(
-  sessions: StudySession[]
-): { subject: string; minutes: number } | null {
-  const timeBySubject = calculateStudyTimeBySubject(sessions);
-  const subjects = Object.entries(timeBySubject);
-
-  if (subjects.length === 0) return null;
-
-  const [subject, minutes] = subjects.reduce((max, current) =>
-    current[1] > max[1] ? current : max
-  );
-
-  return { subject, minutes };
-}
-
-/**
- * Calculate completion rate (percentage of completed sessions)
- */
-export function calculateCompletionRate(sessions: StudySession[]): number {
-  if (sessions.length === 0) return 0;
-  const completedCount = sessions.filter((s) => s.completed).length;
-  return (completedCount / sessions.length) * 100;
-}
-
-/**
- * Calculate assignment completion rate based on submissions
- */
-export function calculateAssignmentCompletionRate(
-  assignments: Assignment[],
-  submissions: AssignmentSubmission[]
-): number {
-  if (assignments.length === 0) return 0;
-
-  const completedSubmissions = submissions.filter(
-    (sub) => sub.status === 'submitted' || sub.status === 'graded'
-  );
-  const uniqueCompletedAssignments = new Set(
-    completedSubmissions.map((sub) => sub.assignmentId)
-  );
-
-  return (uniqueCompletedAssignments.size / assignments.length) * 100;
-}
-
-/**
- * Calculate planning accuracy (how close estimated hours are to actual hours)
- */
-export function calculatePlanningAccuracy(
-  submissions: AssignmentSubmission[]
-): number {
-  const submissionsWithBoth = submissions.filter(
-    (sub) =>
-      sub.estimatedHours !== undefined &&
-      sub.actualHours !== undefined &&
-      sub.estimatedHours > 0
-  );
-
-  if (submissionsWithBoth.length === 0) return 0;
-
-  const totalAccuracy = submissionsWithBoth.reduce((sum, sub) => {
-    const estimated = sub.estimatedHours!;
-    const actual = sub.actualHours!;
-    // Calculate accuracy as percentage: 100% - (difference percentage)
-    const difference = Math.abs(estimated - actual);
-    const accuracy = Math.max(0, 100 - (difference / estimated) * 100);
-    return sum + accuracy;
-  }, 0);
-
-  return totalAccuracy / submissionsWithBoth.length;
-}
-
-/**
- * Calculate priority distribution of assignments
- */
-export function calculatePriorityDistribution(assignments: Assignment[]): {
-  high: number;
-  medium: number;
-  low: number;
-} {
-  const distribution = {
-    high: 0,
-    medium: 0,
-    low: 0,
-  };
+export function calculateMetrics(
+  assignments: AssignmentWithSubmission[],
+  submissions: Record<string, any>
+): StudyMetrics {
+  const totalAssignments = assignments.length
+  let completedAssignments = 0
+  let inProgressAssignments = 0
+  let overdueAssignments = 0
+  let totalEstimatedHours = 0
+  let totalActualHours = 0
+  let accuracySum = 0
+  let accuracyCount = 0
+  const priorityDistribution = { high: 0, medium: 0, low: 0 }
+  const weeklyData: Record<string, { completed: number; estimatedHours: number; actualHours: number }> = {}
+  const courseProgress: Record<string, { completed: number; total: number; title: string }> = {}
 
   assignments.forEach((assignment) => {
-    distribution[assignment.priority]++;
-  });
-
-  return distribution;
-}
-
-/**
- * Calculate weekly progress for assignments
- */
-export function calculateWeeklyProgress(
-  assignments: Assignment[],
-  submissions: AssignmentSubmission[]
-): Array<{ weekStart: string; completed: number; total: number }> {
-  // Group assignments by week
-  const weekMap = new Map<string, { assignments: Assignment[]; completed: Set<string> }>();
-
-  assignments.forEach((assignment) => {
-    if (!assignment.dueDate) return;
-
-    const date = new Date(assignment.dueDate);
-    const weekStart = getWeekStart(date);
-    const weekKey = weekStart.toISOString().split('T')[0];
-
-    if (!weekMap.has(weekKey)) {
-      weekMap.set(weekKey, {
-        assignments: [],
-        completed: new Set(),
-      });
+    const submission = submissions[assignment.id]
+    // Use submission status if available, otherwise use assignment status
+    const status = submission?.status || assignment.status || 'pending'
+    
+    // Count by status
+    if (status === 'completed' || status === 'submitted') {
+      completedAssignments++
+    } else if (status === 'in_progress') {
+      inProgressAssignments++
+    } else if (status === 'overdue') {
+      overdueAssignments++
     }
 
-    weekMap.get(weekKey)!.assignments.push(assignment);
-  });
+    // Track priority
+    const priority = submission?.priority || 'medium'
+    priorityDistribution[priority as keyof typeof priorityDistribution]++
 
-  // Mark completed assignments
-  submissions.forEach((submission) => {
-    if (submission.status === 'submitted' || submission.status === 'graded') {
-      const assignment = assignments.find((a) => a.id === submission.assignmentId);
-      if (assignment && assignment.dueDate) {
-        const date = new Date(assignment.dueDate);
-        const weekStart = getWeekStart(date);
-        const weekKey = weekStart.toISOString().split('T')[0];
-        const weekData = weekMap.get(weekKey);
-        if (weekData) {
-          weekData.completed.add(submission.assignmentId);
-        }
+    // Calculate hours and accuracy
+    const estimated = submission?.estimated_hours || 0
+    const actual = submission?.actual_hours || 0
+    
+    if (estimated > 0 && actual > 0 && (status === 'completed' || status === 'submitted')) {
+      totalEstimatedHours += estimated
+      totalActualHours += actual
+      const accuracy = Math.abs(actual - estimated)
+      accuracySum += accuracy
+      accuracyCount++
+    }
+
+    // Weekly progress tracking
+    if (assignment.due_date) {
+      const date = new Date(assignment.due_date)
+      const weekKey = getWeekKey(date)
+      if (!weeklyData[weekKey]) {
+        weeklyData[weekKey] = { completed: 0, estimatedHours: 0, actualHours: 0 }
+      }
+      if (status === 'completed' || status === 'submitted') {
+        weeklyData[weekKey].completed++
+        weeklyData[weekKey].estimatedHours += estimated || 0
+        weeklyData[weekKey].actualHours += actual || 0
       }
     }
-  });
 
-  // Convert to array format
-  return Array.from(weekMap.entries())
-    .map(([weekStart, data]) => ({
-      weekStart,
-      completed: data.completed.size,
-      total: data.assignments.length,
+    // Course progress tracking
+    const courseId = assignment.course_id
+    const courseTitle = assignment.courses?.title || 'Unknown Course'
+    if (!courseProgress[courseId]) {
+      courseProgress[courseId] = { completed: 0, total: 0, title: courseTitle }
+    }
+    courseProgress[courseId].total++
+    if (status === 'completed' || status === 'submitted') {
+      courseProgress[courseId].completed++
+    }
+  })
+
+  const completionRate = totalAssignments > 0 ? (completedAssignments / totalAssignments) * 100 : 0
+  const averageAccuracy = accuracyCount > 0 ? accuracySum / accuracyCount : 0
+  const timeDifference = totalActualHours - totalEstimatedHours
+  const accuracyPercentage = totalEstimatedHours > 0 
+    ? ((totalEstimatedHours / totalActualHours) * 100) 
+    : 100
+
+  const weeklyProgress = Object.entries(weeklyData)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([week, data]) => ({
+      week,
+      completed: data.completed,
+      estimatedHours: data.estimatedHours,
+      actualHours: data.actualHours,
     }))
-    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+
+  const courseProgressArray = Object.entries(courseProgress).map(([courseId, data]) => ({
+    courseId,
+    courseTitle: data.title,
+    assignmentsCompleted: data.completed,
+    assignmentsTotal: data.total,
+    progressPercentage: data.total > 0 ? (data.completed / data.total) * 100 : 0,
+  }))
+
+  return {
+    totalAssignments,
+    completedAssignments,
+    inProgressAssignments,
+    overdueAssignments,
+    completionRate,
+    averageAccuracy,
+    totalEstimatedHours,
+    totalActualHours,
+    timeDifference,
+    accuracyPercentage,
+    priorityDistribution,
+    weeklyProgress,
+    courseProgress: courseProgressArray,
+  }
 }
 
-/**
- * Calculate progress per course
- */
-export function calculateCourseProgress(
-  assignments: Assignment[],
-  submissions: AssignmentSubmission[]
-): Array<{ courseId: string; completion: number }> {
-  const courseMap = new Map<string, { total: number; completed: Set<string> }>();
-
-  // Count total assignments per course
-  assignments.forEach((assignment) => {
-    if (!courseMap.has(assignment.courseId)) {
-      courseMap.set(assignment.courseId, {
-        total: 0,
-        completed: new Set(),
-      });
-    }
-    courseMap.get(assignment.courseId)!.total++;
-  });
-
-  // Mark completed assignments
-  submissions.forEach((submission) => {
-    if (submission.status === 'submitted' || submission.status === 'graded') {
-      const assignment = assignments.find((a) => a.id === submission.assignmentId);
-      if (assignment) {
-        const courseData = courseMap.get(assignment.courseId);
-        if (courseData) {
-          courseData.completed.add(submission.assignmentId);
-        }
-      }
-    }
-  });
-
-  // Calculate completion percentage
-  return Array.from(courseMap.entries()).map(([courseId, data]) => {
-    const completion =
-      data.total === 0 ? 0 : (data.completed.size / data.total) * 100;
-    return { courseId, completion };
-  });
+function getWeekKey(date: Date): string {
+  const year = date.getFullYear()
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  const week = Math.ceil(day / 7)
+  return `${year}-W${month}-${week}`
 }
 
-/**
- * Get week start (Monday) for a given date
- */
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
-  return new Date(d.setDate(diff));
-}
-
-/**
- * Get metrics interpretation with level, message, and recommendations
- */
-export function getMetricsInterpretation(metrics: AssignmentMetrics): {
-  level: 'excellent' | 'good' | 'fair' | 'needs-improvement';
-  message: string;
-  recommendations: string[];
+export function getMetricsInterpretation(metrics: StudyMetrics): {
+  level: 'excellent' | 'good' | 'fair' | 'needs-improvement'
+  message: string
+  recommendations: string[]
 } {
-  const { completionRate, planningAccuracy, priorityDistribution, weeklyProgress } = metrics;
+  const recommendations: string[] = []
+  let level: 'excellent' | 'good' | 'fair' | 'needs-improvement' = 'good'
+  let message = ''
 
-  let level: 'excellent' | 'good' | 'fair' | 'needs-improvement';
-  let message: string;
-  const recommendations: string[] = [];
-
-  // Determine level based on completion rate and planning accuracy
-  const avgScore = (completionRate + planningAccuracy) / 2;
-
-  if (avgScore >= 85) {
-    level = 'excellent';
-    message = 'You\'re doing great! Keep up the excellent work.';
-  } else if (avgScore >= 70) {
-    level = 'good';
-    message = 'You\'re on track! There\'s room for improvement.';
-  } else if (avgScore >= 50) {
-    level = 'fair';
-    message = 'You\'re making progress, but could benefit from better planning.';
+  // Completion rate analysis
+  if (metrics.completionRate >= 90) {
+    message += 'Excellent completion rate! '
+    level = 'excellent'
+  } else if (metrics.completionRate >= 70) {
+    message += 'Good progress on assignments. '
+  } else if (metrics.completionRate >= 50) {
+    message += 'You\'re making progress, but there\'s room for improvement. '
+    level = 'fair'
+    recommendations.push('Focus on completing pending assignments to improve your completion rate')
   } else {
-    level = 'needs-improvement';
-    message = 'Consider adjusting your study habits and planning strategies.';
+    message += 'Completion rate needs attention. '
+    level = 'needs-improvement'
+    recommendations.push('Prioritize completing overdue and pending assignments')
   }
 
-  // Generate recommendations based on metrics
-  if (completionRate < 70) {
-    recommendations.push('Focus on completing assignments on time to improve your completion rate.');
+  // Planning accuracy analysis
+  if (metrics.averageAccuracy <= 1) {
+    message += 'Your time estimates are very accurate! '
+    if (level === 'good') level = 'excellent'
+  } else if (metrics.averageAccuracy <= 2) {
+    message += 'Your planning accuracy is good. '
+  } else {
+    message += 'Consider improving your time estimation skills. '
+    if (level === 'excellent') level = 'good'
+    else if (level === 'good') level = 'fair'
+    recommendations.push('Review completed assignments to better estimate time for similar tasks')
   }
 
-  if (planningAccuracy < 70) {
-    recommendations.push('Work on better time estimation. Track actual vs estimated hours to improve accuracy.');
+  // Overdue assignments
+  if (metrics.overdueAssignments > 0) {
+    message += `You have ${metrics.overdueAssignments} overdue assignment(s). `
+    if (level === 'excellent') level = 'good'
+    else if (level === 'good') level = 'fair'
+    recommendations.push('Address overdue assignments immediately')
   }
 
-  const highPriorityCount = priorityDistribution.high;
-  const totalAssignments = priorityDistribution.high + priorityDistribution.medium + priorityDistribution.low;
-  if (highPriorityCount > totalAssignments * 0.4 && totalAssignments > 0) {
-    recommendations.push('You have many high-priority assignments. Consider breaking them into smaller tasks.');
+  // Priority distribution
+  const highPriorityCount = metrics.priorityDistribution.high
+  if (highPriorityCount > metrics.totalAssignments * 0.5) {
+    recommendations.push('Consider if all high-priority items truly need immediate attention')
   }
 
-  // Check for weeks with low completion
-  const recentWeeks = weeklyProgress.slice(-4);
-  const lowCompletionWeeks = recentWeeks.filter(
-    (week) => week.total > 0 && week.completed / week.total < 0.5
-  );
-  if (lowCompletionWeeks.length > 0) {
-    recommendations.push('Some recent weeks had low completion rates. Review your weekly planning strategy.');
-  }
-
-  // Check for courses with low progress
-  const lowProgressCourses = metrics.courseProgress.filter((cp) => cp.completion < 50);
-  if (lowProgressCourses.length > 0) {
-    recommendations.push(`Focus on improving progress in ${lowProgressCourses.length} course(s) with low completion.`);
+  // Time management
+  if (metrics.timeDifference > 0 && metrics.totalActualHours > 0) {
+    const overagePercentage = (metrics.timeDifference / metrics.totalEstimatedHours) * 100
+    if (overagePercentage > 20) {
+      recommendations.push('You\'re consistently underestimating time. Add buffer time to your estimates')
+    }
   }
 
   if (recommendations.length === 0) {
-    recommendations.push('Continue maintaining your current study habits!');
+    recommendations.push('Keep up the great work!')
   }
 
-  return { level, message, recommendations };
+  return { level, message, recommendations }
 }
-
