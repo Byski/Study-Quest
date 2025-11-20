@@ -49,7 +49,9 @@ describe('Login Flow', () => {
     await user.type(screen.getByLabelText(/email/i), 'test@example.com');
     await user.type(screen.getByLabelText(/password/i), 'password123');
     
-    const submitButton = screen.getByRole('button', { type: 'submit' });
+    const buttons = screen.getAllByRole('button');
+    const submitButton = buttons.find(btn => btn.getAttribute('type') === 'submit');
+    if (!submitButton) throw new Error('Submit button not found');
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -77,7 +79,9 @@ describe('Login Flow', () => {
     await user.type(screen.getByLabelText(/email/i), 'student@example.com');
     await user.type(screen.getByLabelText(/password/i), 'password123');
     
-    const submitButton = screen.getByRole('button', { type: 'submit' });
+    const buttons = screen.getAllByRole('button');
+    const submitButton = buttons.find(btn => btn.getAttribute('type') === 'submit');
+    if (!submitButton) throw new Error('Submit button not found');
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -102,7 +106,9 @@ describe('Login Flow', () => {
     await user.type(screen.getByLabelText(/email/i), 'admin@example.com');
     await user.type(screen.getByLabelText(/password/i), 'password123');
     
-    const submitButton = screen.getByRole('button', { type: 'submit' });
+    const buttons = screen.getAllByRole('button');
+    const submitButton = buttons.find(btn => btn.getAttribute('type') === 'submit');
+    if (!submitButton) throw new Error('Submit button not found');
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -120,7 +126,9 @@ describe('Login Flow', () => {
     await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
     await user.type(screen.getByLabelText(/password/i), 'wrongpassword');
     
-    const submitButton = screen.getByRole('button', { type: 'submit' });
+    const buttons = screen.getAllByRole('button');
+    const submitButton = buttons.find(btn => btn.getAttribute('type') === 'submit');
+    if (!submitButton) throw new Error('Submit button not found');
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -138,7 +146,9 @@ describe('Login Flow', () => {
     await user.type(screen.getByLabelText(/email/i), 'test@example.com');
     await user.type(screen.getByLabelText(/password/i), 'password123');
     
-    const submitButton = screen.getByRole('button', { type: 'submit' });
+    const buttons = screen.getAllByRole('button');
+    const submitButton = buttons.find(btn => btn.getAttribute('type') === 'submit');
+    if (!submitButton) throw new Error('Submit button not found');
     await user.click(submitButton);
 
     await waitFor(() => {

@@ -33,7 +33,7 @@ describe('Register Flow', () => {
     await user.click(registerButton);
 
     expect(screen.getByRole('heading', { name: /register/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/user type/i)).toBeInTheDocument();
+    expect(screen.getByText(/user type/i)).toBeInTheDocument();
   });
 
   it('should require user type selection', async () => {
@@ -84,7 +84,9 @@ describe('Register Flow', () => {
     await user.click(adminRadio);
 
     // Submit (use type="submit" to get the form submit button)
-    const submitButton = screen.getByRole('button', { type: 'submit' });
+    const buttons = screen.getAllByRole('button');
+    const submitButton = buttons.find(btn => btn.getAttribute('type') === 'submit');
+    if (!submitButton) throw new Error('Submit button not found');
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -151,7 +153,9 @@ describe('Register Flow', () => {
     await user.type(screen.getByLabelText(/email/i), 'invalid-email');
     await user.type(screen.getByLabelText(/password/i), '123');
     
-    const submitButton = screen.getByRole('button', { type: 'submit' });
+    const buttons = screen.getAllByRole('button');
+    const submitButton = buttons.find(btn => btn.getAttribute('type') === 'submit');
+    if (!submitButton) throw new Error('Submit button not found');
     await user.click(submitButton);
 
     await waitFor(() => {
