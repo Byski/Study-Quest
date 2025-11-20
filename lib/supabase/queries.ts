@@ -13,6 +13,10 @@ type StudyGoal = Database['public']['Tables']['study_goals']['Row'];
 type StudyGoalInsert = Database['public']['Tables']['study_goals']['Insert'];
 type StudyGoalUpdate = Database['public']['Tables']['study_goals']['Update'];
 
+type Course = Database['public']['Tables']['courses']['Row'];
+type CourseInsert = Database['public']['Tables']['courses']['Insert'];
+type CourseUpdate = Database['public']['Tables']['courses']['Update'];
+
 /**
  * Get all study sessions for the current user
  */
@@ -151,5 +155,19 @@ export async function deleteStudyGoal(id: string): Promise<void> {
     .eq('id', id);
 
   if (error) throw error;
+}
+
+/**
+ * Create a new course
+ */
+export async function createCourse(course: CourseInsert): Promise<Course> {
+  const { data, error } = await supabase
+    .from('courses')
+    .insert(course)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 

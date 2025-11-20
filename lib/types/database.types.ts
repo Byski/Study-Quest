@@ -104,6 +104,34 @@ export interface Database {
           updated_at?: string;
         };
       };
+      courses: {
+        Row: {
+          id: string;
+          owner_id: string;
+          name: string;
+          code: string | null;
+          color: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          name: string;
+          code?: string | null;
+          color?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          name?: string;
+          code?: string | null;
+          color?: string | null;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

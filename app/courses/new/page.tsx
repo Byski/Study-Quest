@@ -2,16 +2,21 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getSession } from '@/lib/supabase/auth';
+import { createCourse } from '@/lib/supabase/queries';
 
 export default function NewCoursePage() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [color, setColor] = useState('#3b82f6');
   const [nameError, setNameError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setNameError(null);
 
     // Validation
@@ -20,8 +25,28 @@ export default function NewCoursePage() {
       return;
     }
 
-    // TODO: Implement course creation (SCRUM-10 functionality commit)
-    console.log('Form submitted:', { name, code, color });
+    setLoading(true);
+
+    try {
+      const session = await getSession();
+      if (!session) {
+        router.push('/auth');
+        return;
+      }
+
+      await createCourse({
+        owner_id: session.user.id,
+        name: name.trim(),
+        code: code.trim() || null,
+        color: color.trim() || null,
+      });
+
+      router.push('/courses');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create course');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -35,6 +60,12 @@ export default function NewCoursePage() {
             Add a new course to organize your assignments
           </p>
         </div>
+
+        {error && (
+          <div className="mb-4 rounded-md bg-red-100 p-3 text-sm text-red-700 dark:bg-red-900 dark:text-red-200">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6 rounded-lg bg-white p-6 shadow-sm dark:bg-zinc-900">
           <div>
@@ -119,9 +150,10 @@ export default function NewCoursePage() {
           <div className="flex gap-4 pt-4">
             <button
               type="submit"
-              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              disabled={loading}
+              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create Course
+              {loading ? 'Creating...' : 'Create Course'}
             </button>
             <button
               type="button"
