@@ -41,7 +41,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /^login$/i });
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'student@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -64,7 +64,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /^login$/i });
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'admin@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -86,7 +86,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /^login$/i });
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'user@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -105,7 +105,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /^login$/i });
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'wrong@example.com');
     await userEvent.type(passwordInput, 'wrongpassword');
@@ -124,7 +124,7 @@ describe('Login Flow', () => {
 
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /^login$/i });
+    const submitButton = screen.getAllByRole('button').find(btn => btn.getAttribute('type') === 'submit')!;
 
     await userEvent.type(emailInput, 'test@example.com');
     await userEvent.type(passwordInput, 'password123');
@@ -141,8 +141,10 @@ describe('Login Flow', () => {
     expect(screen.getAllByText('Login').length).toBeGreaterThan(0);
     expect(screen.queryByText(/user type/i)).not.toBeInTheDocument();
 
-    const registerButtons = screen.getAllByText('Register');
-    const toggleButton = registerButtons.find(btn => btn.getAttribute('type') === 'button');
+    const buttons = screen.getAllByRole('button');
+    const toggleButton = buttons.find(
+      (btn) => btn.textContent === 'Register' && btn.getAttribute('type') === 'button'
+    );
     if (toggleButton) {
       await userEvent.click(toggleButton);
     }
