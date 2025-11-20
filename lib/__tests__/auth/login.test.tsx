@@ -27,7 +27,7 @@ describe('Login Flow', () => {
 
   it('should show login form by default', () => {
     render(<AuthPage />);
-    expect(screen.getByText(/login/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /login/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
   });
@@ -151,7 +151,7 @@ describe('Login Flow', () => {
     render(<AuthPage />);
 
     // Should show login form
-    expect(screen.getByText(/login/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /login/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/user type/i)).not.toBeInTheDocument();
 
     // Click register button
@@ -159,7 +159,7 @@ describe('Login Flow', () => {
     await user.click(registerButton);
 
     // Should show register form
-    expect(screen.getByText(/register/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /register/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/user type/i)).toBeInTheDocument();
 
     // Click login button
@@ -167,7 +167,7 @@ describe('Login Flow', () => {
     await user.click(loginButton);
 
     // Should show login form again
-    expect(screen.getByText(/login/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /login/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/user type/i)).not.toBeInTheDocument();
   });
 });

@@ -32,7 +32,7 @@ describe('Register Flow', () => {
     const registerButton = screen.getByRole('button', { name: /register/i });
     await user.click(registerButton);
 
-    expect(screen.getByText(/register/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /register/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/user type/i)).toBeInTheDocument();
   });
 
