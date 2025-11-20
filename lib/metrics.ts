@@ -270,9 +270,9 @@ export function calculateCompletionRate(sessions: StudySession[]): number {
 }
 
 /**
- * Calculate completion rate for assignments based on submissions
+ * Calculate assignment completion rate based on submissions
  */
-export function calculateCompletionRate(
+export function calculateAssignmentCompletionRate(
   assignments: Assignment[],
   submissions: AssignmentSubmission[]
 ): number {
