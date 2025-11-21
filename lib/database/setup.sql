@@ -129,6 +129,10 @@ CREATE POLICY "Anyone can view assignments"
   ON assignments FOR SELECT
   USING (true);
 
+-- Drop existing policy if it exists, then create new one
+DROP POLICY IF EXISTS "Only admins can create assignments" ON assignments;
+DROP POLICY IF EXISTS "Authenticated users can create assignments" ON assignments;
+
 CREATE POLICY "Authenticated users can create assignments"
   ON assignments FOR INSERT
   WITH CHECK (auth.uid() IS NOT NULL);

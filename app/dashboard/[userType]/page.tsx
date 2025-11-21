@@ -40,6 +40,7 @@ interface Assignment {
   status?: string
   points?: number
   created_at?: string
+  courses?: Course
 }
 
 export default function DashboardPage({ params }: { params: { userType: string } }) {
@@ -66,6 +67,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
   })
   
   // Assignment states
+  const [assignments, setAssignments] = useState<Assignment[]>([])
   const [showAssignmentModal, setShowAssignmentModal] = useState(false)
   const [assignmentForm, setAssignmentForm] = useState({
     title: '',
@@ -80,9 +82,11 @@ export default function DashboardPage({ params }: { params: { userType: string }
     if (userType === 'student') {
       loadEnrolledCourses()
       loadCourses() // Load courses for assignment dropdown
+      loadAssignments()
     } else if (userType === 'admin') {
       loadCourses()
       loadStats()
+      loadAssignments()
     }
   }, [userType])
 
@@ -169,6 +173,24 @@ export default function DashboardPage({ params }: { params: { userType: string }
       })
     } catch (error: any) {
       console.error('Error loading stats:', error.message)
+    }
+  }
+
+  const loadAssignments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('assignments')
+        .select(`
+          *,
+          courses (*)
+        `)
+        .order('due_date', { ascending: true })
+
+      if (error) throw error
+      setAssignments((data as any) || [])
+    } catch (error: any) {
+      console.error('Error loading assignments:', error.message)
+      setAssignments([])
     }
   }
 
@@ -320,6 +342,36 @@ export default function DashboardPage({ params }: { params: { userType: string }
     setShowAssignmentModal(true)
   }
 
+  const formatDueDate = (dueDate: string): { text: string; isOverdue: boolean; days: number; isToday?: boolean; isSoon?: boolean } => {
+    if (!dueDate) {
+      return { text: 'No due date', isOverdue: false, days: 0 }
+    }
+    const date = new Date(dueDate)
+    const now = new Date()
+    const diffTime = date.getTime() - now.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    const formattedDate = date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+
+    if (diffDays < 0) {
+      return { text: `Overdue: ${formattedDate}`, isOverdue: true, days: diffDays }
+    } else if (diffDays === 0) {
+      return { text: `Due today: ${formattedDate}`, isOverdue: false, days: 0, isToday: true }
+    } else if (diffDays === 1) {
+      return { text: `Due tomorrow: ${formattedDate}`, isOverdue: false, days: 1, isSoon: true }
+    } else if (diffDays <= 7) {
+      return { text: `Due in ${diffDays} days: ${formattedDate}`, isOverdue: false, days: diffDays, isSoon: true }
+    } else {
+      return { text: `Due: ${formattedDate}`, isOverdue: false, days: diffDays }
+    }
+  }
+
   const handleCreateAssignment = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -378,6 +430,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
 
       setShowAssignmentModal(false)
       setAssignmentForm({ title: '', course_id: '', description: '', due_date: '', due_time: '' })
+      loadAssignments() // Reload assignments after creation
       setNotification({ message: 'Assignment created successfully!', type: 'success' })
     } catch (error: any) {
       console.error('Error creating assignment:', error)
@@ -649,6 +702,100 @@ export default function DashboardPage({ params }: { params: { userType: string }
                   </div>
                 )}
               </div>
+
+              {/* Assignments Section */}
+              <div>
+                <h3 className="text-2xl font-bold text-light mb-6 flex items-center gap-3">
+                  <FileText className="w-6 h-6 text-primary-500" />
+                  My Assignments
+                </h3>
+                {assignments.length === 0 ? (
+                  <div className="text-center py-16 border-2 border-dashed border-primary-500/30 rounded-2xl bg-dark-navy/40 backdrop-blur-sm">
+                    <div className="w-20 h-20 bg-primary-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <FileText className="w-10 h-10 text-primary-500/60" />
+                    </div>
+                    <h4 className="text-xl font-semibold text-light mb-2">No Assignments Yet</h4>
+                    <p className="text-light/70 mb-6 max-w-md mx-auto">Create your first assignment to get started!</p>
+                    <button
+                      onClick={openCreateAssignmentModal}
+                      className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:shadow-xl transition-all transform hover:scale-105"
+                    >
+                      Create Assignment
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {assignments.map((assignment) => {
+                      const course = assignment.courses as Course
+                      const dueDateInfo = formatDueDate(assignment.due_date)
+                      return (
+                        <div
+                          key={assignment.id}
+                          className={`group bg-dark-navy/60 backdrop-blur-sm border-2 rounded-2xl p-6 hover:shadow-xl transition-all transform hover:scale-[1.02] ${
+                            dueDateInfo.isOverdue 
+                              ? 'border-red-500/50 hover:border-red-500' 
+                              : dueDateInfo.isToday 
+                              ? 'border-yellow-500/50 hover:border-yellow-500'
+                              : dueDateInfo.isSoon
+                              ? 'border-orange-500/50 hover:border-orange-500'
+                              : 'border-primary-500/20 hover:border-primary-500/50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h4 className="text-lg font-bold text-light">{assignment.title}</h4>
+                                {assignment.status === 'completed' && (
+                                  <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                                )}
+                              </div>
+                              {course && (
+                                <p className="text-primary-400 text-sm mb-2 font-medium">{course.title}</p>
+                              )}
+                              {assignment.description && (
+                                <p className="text-light/70 text-sm mb-4 line-clamp-2">{assignment.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className={`mt-4 p-3 rounded-xl ${
+                            dueDateInfo.isOverdue 
+                              ? 'bg-red-500/20 border border-red-500/30' 
+                              : dueDateInfo.isToday 
+                              ? 'bg-yellow-500/20 border border-yellow-500/30'
+                              : dueDateInfo.isSoon
+                              ? 'bg-orange-500/20 border border-orange-500/30'
+                              : 'bg-primary-500/20 border border-primary-500/30'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <Calendar className={`w-4 h-4 ${
+                                dueDateInfo.isOverdue 
+                                  ? 'text-red-400' 
+                                  : dueDateInfo.isToday 
+                                  ? 'text-yellow-400'
+                                  : dueDateInfo.isSoon
+                                  ? 'text-orange-400'
+                                  : 'text-primary-400'
+                              }`} />
+                              <span className={`text-sm font-semibold ${
+                                dueDateInfo.isOverdue 
+                                  ? 'text-red-400' 
+                                  : dueDateInfo.isToday 
+                                  ? 'text-yellow-400'
+                                  : dueDateInfo.isSoon
+                                  ? 'text-orange-400'
+                                  : 'text-primary-400'
+                              }`}>
+                                {dueDateInfo.text}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-8">
@@ -816,6 +963,100 @@ export default function DashboardPage({ params }: { params: { userType: string }
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Assignments Management */}
+              <div>
+                <h3 className="text-2xl font-bold text-light mb-6 flex items-center gap-3">
+                  <FileText className="w-6 h-6 text-primary-500" />
+                  Assignments
+                </h3>
+                {assignments.length === 0 ? (
+                  <div className="text-center py-16 border-2 border-dashed border-primary-500/30 rounded-2xl bg-dark-navy/40 backdrop-blur-sm">
+                    <div className="w-20 h-20 bg-primary-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <FileText className="w-10 h-10 text-primary-500/60" />
+                    </div>
+                    <h4 className="text-xl font-semibold text-light mb-2">No Assignments Yet</h4>
+                    <p className="text-light/70 mb-6">Create your first assignment to get started!</p>
+                    <button
+                      onClick={openCreateAssignmentModal}
+                      className="px-8 py-3 bg-gradient-to-r from-accent to-accent-dark text-white font-semibold rounded-xl hover:shadow-xl transition-all transform hover:scale-105"
+                    >
+                      Create Assignment
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {assignments.map((assignment) => {
+                      const course = assignment.courses as Course
+                      const dueDateInfo = formatDueDate(assignment.due_date)
+                      return (
+                        <div
+                          key={assignment.id}
+                          className={`group bg-dark-navy/60 backdrop-blur-sm border-2 rounded-2xl p-6 hover:shadow-xl transition-all transform hover:scale-[1.02] ${
+                            dueDateInfo.isOverdue 
+                              ? 'border-red-500/50 hover:border-red-500' 
+                              : dueDateInfo.isToday 
+                              ? 'border-yellow-500/50 hover:border-yellow-500'
+                              : dueDateInfo.isSoon
+                              ? 'border-orange-500/50 hover:border-orange-500'
+                              : 'border-primary-500/20 hover:border-primary-500/50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h4 className="text-lg font-bold text-light">{assignment.title}</h4>
+                                {assignment.status === 'completed' && (
+                                  <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                                )}
+                              </div>
+                              {course && (
+                                <p className="text-primary-400 text-sm mb-2 font-medium">{course.title}</p>
+                              )}
+                              {assignment.description && (
+                                <p className="text-light/70 text-sm mb-4 line-clamp-2">{assignment.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className={`mt-4 p-3 rounded-xl ${
+                            dueDateInfo.isOverdue 
+                              ? 'bg-red-500/20 border border-red-500/30' 
+                              : dueDateInfo.isToday 
+                              ? 'bg-yellow-500/20 border border-yellow-500/30'
+                              : dueDateInfo.isSoon
+                              ? 'bg-orange-500/20 border border-orange-500/30'
+                              : 'bg-primary-500/20 border border-primary-500/30'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <Calendar className={`w-4 h-4 ${
+                                dueDateInfo.isOverdue 
+                                  ? 'text-red-400' 
+                                  : dueDateInfo.isToday 
+                                  ? 'text-yellow-400'
+                                  : dueDateInfo.isSoon
+                                  ? 'text-orange-400'
+                                  : 'text-primary-400'
+                              }`} />
+                              <span className={`text-sm font-semibold ${
+                                dueDateInfo.isOverdue 
+                                  ? 'text-red-400' 
+                                  : dueDateInfo.isToday 
+                                  ? 'text-yellow-400'
+                                  : dueDateInfo.isSoon
+                                  ? 'text-orange-400'
+                                  : 'text-primary-400'
+                              }`}>
+                                {dueDateInfo.text}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
