@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { BookOpen, LogOut, User, Shield, Sword, ArrowRight, CheckCircle, Plus, Edit, Trash2, Users, BookMarked, TrendingUp, X, FileText, Calendar } from 'lucide-react'
+import { BookOpen, LogOut, User, Shield, Sword, ArrowRight, CheckCircle, Plus, Edit, Trash2, Users, BookMarked, TrendingUp, X, FileText, Calendar, Filter } from 'lucide-react'
 import Notification from '@/components/Notification'
 
 interface Course {
@@ -75,6 +75,14 @@ export default function DashboardPage({ params }: { params: { userType: string }
     description: '',
     due_date: '',
     due_time: ''
+  })
+  
+  // Assignment filters (for students)
+  const [assignmentFilters, setAssignmentFilters] = useState({
+    course_id: '',
+    status: '',
+    due_date_from: '',
+    due_date_to: ''
   })
 
   useEffect(() => {
@@ -370,6 +378,59 @@ export default function DashboardPage({ params }: { params: { userType: string }
     } else {
       return { text: `Due: ${formattedDate}`, isOverdue: false, days: diffDays }
     }
+  }
+
+  const filterAssignments = (assignmentsList: Assignment[]) => {
+    return assignmentsList.filter((assignment) => {
+      // Filter by course
+      if (assignmentFilters.course_id && assignment.course_id !== assignmentFilters.course_id) {
+        return false
+      }
+
+      // Filter by status
+      if (assignmentFilters.status) {
+        const assignmentStatus = assignment.status || 'pending'
+        if (assignmentFilters.status === 'overdue') {
+          const dueDateInfo = formatDueDate(assignment.due_date)
+          if (!dueDateInfo.isOverdue) return false
+        } else if (assignmentStatus !== assignmentFilters.status) {
+          return false
+        }
+      }
+
+      // Filter by due date range
+      if (assignmentFilters.due_date_from || assignmentFilters.due_date_to) {
+        if (!assignment.due_date) return false
+        
+        const assignmentDate = new Date(assignment.due_date)
+        assignmentDate.setHours(0, 0, 0, 0)
+
+        if (assignmentFilters.due_date_from) {
+          const fromDate = new Date(assignmentFilters.due_date_from)
+          fromDate.setHours(0, 0, 0, 0)
+          if (assignmentDate < fromDate) return false
+        }
+
+        if (assignmentFilters.due_date_to) {
+          const toDate = new Date(assignmentFilters.due_date_to)
+          toDate.setHours(23, 59, 59, 999)
+          if (assignmentDate > toDate) return false
+        }
+      }
+
+      return true
+    })
+  }
+
+  const filteredAssignments = userType === 'student' ? filterAssignments(assignments) : assignments
+
+  const clearFilters = () => {
+    setAssignmentFilters({
+      course_id: '',
+      status: '',
+      due_date_from: '',
+      due_date_to: ''
+    })
   }
 
   const handleCreateAssignment = async () => {
@@ -705,10 +766,86 @@ export default function DashboardPage({ params }: { params: { userType: string }
 
               {/* Assignments Section */}
               <div>
-                <h3 className="text-2xl font-bold text-light mb-6 flex items-center gap-3">
-                  <FileText className="w-6 h-6 text-primary-500" />
-                  My Assignments
-                </h3>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-light flex items-center gap-3">
+                    <FileText className="w-6 h-6 text-primary-500" />
+                    My Assignments
+                  </h3>
+                </div>
+
+                {/* Filters */}
+                <div className="bg-dark-navy/60 backdrop-blur-sm border-2 border-primary-500/20 rounded-2xl p-6 mb-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Filter className="w-5 h-5 text-primary-400" />
+                    <h4 className="text-lg font-semibold text-light">Filter Assignments</h4>
+                    {(assignmentFilters.course_id || assignmentFilters.status || assignmentFilters.due_date_from || assignmentFilters.due_date_to) && (
+                      <button
+                        onClick={clearFilters}
+                        className="ml-auto text-sm text-primary-400 hover:text-primary-300 underline"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Course Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-light/90 mb-2">Course</label>
+                      <select
+                        value={assignmentFilters.course_id}
+                        onChange={(e) => setAssignmentFilters({ ...assignmentFilters, course_id: e.target.value })}
+                        className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      >
+                        <option value="">All Courses</option>
+                        {courses.map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Status Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-light/90 mb-2">Status</label>
+                      <select
+                        value={assignmentFilters.status}
+                        onChange={(e) => setAssignmentFilters({ ...assignmentFilters, status: e.target.value })}
+                        className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      >
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="overdue">Overdue</option>
+                      </select>
+                    </div>
+
+                    {/* Due Date From */}
+                    <div>
+                      <label className="block text-sm font-medium text-light/90 mb-2">Due From</label>
+                      <input
+                        type="date"
+                        value={assignmentFilters.due_date_from}
+                        onChange={(e) => setAssignmentFilters({ ...assignmentFilters, due_date_from: e.target.value })}
+                        className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      />
+                    </div>
+
+                    {/* Due Date To */}
+                    <div>
+                      <label className="block text-sm font-medium text-light/90 mb-2">Due To</label>
+                      <input
+                        type="date"
+                        value={assignmentFilters.due_date_to}
+                        onChange={(e) => setAssignmentFilters({ ...assignmentFilters, due_date_to: e.target.value })}
+                        min={assignmentFilters.due_date_from || undefined}
+                        className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {assignments.length === 0 ? (
                   <div className="text-center py-16 border-2 border-dashed border-primary-500/30 rounded-2xl bg-dark-navy/40 backdrop-blur-sm">
                     <div className="w-20 h-20 bg-primary-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -723,76 +860,108 @@ export default function DashboardPage({ params }: { params: { userType: string }
                       Create Assignment
                     </button>
                   </div>
+                ) : filteredAssignments.length === 0 ? (
+                  <div className="text-center py-16 border-2 border-dashed border-primary-500/30 rounded-2xl bg-dark-navy/40 backdrop-blur-sm">
+                    <div className="w-20 h-20 bg-primary-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Filter className="w-10 h-10 text-primary-500/60" />
+                    </div>
+                    <h4 className="text-xl font-semibold text-light mb-2">No Assignments Match Filters</h4>
+                    <p className="text-light/70 mb-6 max-w-md mx-auto">Try adjusting your filters to see more assignments</p>
+                    <button
+                      onClick={clearFilters}
+                      className="px-8 py-3 bg-gradient-to-r from-primary-500 to-accent text-white font-semibold rounded-xl hover:shadow-xl transition-all transform hover:scale-105"
+                    >
+                      Clear Filters
+                    </button>
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {assignments.map((assignment) => {
-                      const course = assignment.courses as Course
-                      const dueDateInfo = formatDueDate(assignment.due_date)
-                      return (
-                        <div
-                          key={assignment.id}
-                          className={`group bg-dark-navy/60 backdrop-blur-sm border-2 rounded-2xl p-6 hover:shadow-xl transition-all transform hover:scale-[1.02] ${
-                            dueDateInfo.isOverdue 
-                              ? 'border-red-500/50 hover:border-red-500' 
-                              : dueDateInfo.isToday 
-                              ? 'border-yellow-500/50 hover:border-yellow-500'
-                              : dueDateInfo.isSoon
-                              ? 'border-orange-500/50 hover:border-orange-500'
-                              : 'border-primary-500/20 hover:border-primary-500/50'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <h4 className="text-lg font-bold text-light">{assignment.title}</h4>
-                                {assignment.status === 'completed' && (
-                                  <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-                                )}
-                              </div>
-                              {course && (
-                                <p className="text-primary-400 text-sm mb-2 font-medium">{course.title}</p>
-                              )}
-                              {assignment.description && (
-                                <p className="text-light/70 text-sm mb-4 line-clamp-2">{assignment.description}</p>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <div className={`mt-4 p-3 rounded-xl ${
-                            dueDateInfo.isOverdue 
-                              ? 'bg-red-500/20 border border-red-500/30' 
-                              : dueDateInfo.isToday 
-                              ? 'bg-yellow-500/20 border border-yellow-500/30'
-                              : dueDateInfo.isSoon
-                              ? 'bg-orange-500/20 border border-orange-500/30'
-                              : 'bg-primary-500/20 border border-primary-500/30'
-                          }`}>
-                            <div className="flex items-center gap-2">
-                              <Calendar className={`w-4 h-4 ${
-                                dueDateInfo.isOverdue 
-                                  ? 'text-red-400' 
-                                  : dueDateInfo.isToday 
-                                  ? 'text-yellow-400'
-                                  : dueDateInfo.isSoon
-                                  ? 'text-orange-400'
-                                  : 'text-primary-400'
-                              }`} />
-                              <span className={`text-sm font-semibold ${
-                                dueDateInfo.isOverdue 
-                                  ? 'text-red-400' 
-                                  : dueDateInfo.isToday 
-                                  ? 'text-yellow-400'
-                                  : dueDateInfo.isSoon
-                                  ? 'text-orange-400'
-                                  : 'text-primary-400'
-                              }`}>
-                                {dueDateInfo.text}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
+                  <div className="bg-dark-navy/80 rounded-xl shadow-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-dark-navy/40">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Title</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Course</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Due Date</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Description</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-dark-navy/60 divide-y divide-light/10">
+                          {filteredAssignments.map((assignment) => {
+                            const course = assignment.courses as Course
+                            const dueDateInfo = formatDueDate(assignment.due_date)
+                            const assignmentStatus = assignment.status || 'pending'
+                            return (
+                              <tr 
+                                key={assignment.id} 
+                                className={`hover:bg-primary-500/10 transition-colors ${
+                                  dueDateInfo.isOverdue ? 'bg-red-500/5' : ''
+                                }`}
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-sm font-medium text-light">{assignment.title}</div>
+                                    {assignmentStatus === 'completed' && (
+                                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {course ? (
+                                    <span className="text-sm text-primary-400 font-medium">{course.title}</span>
+                                  ) : (
+                                    <span className="text-sm text-light/50">N/A</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${
+                                    assignmentStatus === 'completed' 
+                                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                      : assignmentStatus === 'in_progress'
+                                      ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                      : dueDateInfo.isOverdue
+                                      ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                      : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                                  }`}>
+                                    {assignmentStatus === 'pending' && dueDateInfo.isOverdue ? 'Overdue' : assignmentStatus}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <Calendar className={`w-4 h-4 ${
+                                      dueDateInfo.isOverdue 
+                                        ? 'text-red-400' 
+                                        : dueDateInfo.isToday 
+                                        ? 'text-yellow-400'
+                                        : dueDateInfo.isSoon
+                                        ? 'text-orange-400'
+                                        : 'text-primary-400'
+                                    }`} />
+                                    <span className={`text-sm font-medium ${
+                                      dueDateInfo.isOverdue 
+                                        ? 'text-red-400' 
+                                        : dueDateInfo.isToday 
+                                        ? 'text-yellow-400'
+                                        : dueDateInfo.isSoon
+                                        ? 'text-orange-400'
+                                        : 'text-light/90'
+                                    }`}>
+                                      {dueDateInfo.text}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-sm text-light/70 line-clamp-2 max-w-md">
+                                    {assignment.description || 'No description'}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
