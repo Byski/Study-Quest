@@ -2,8 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 
 // Supabase configuration
 // You can use environment variables or hardcode them here
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ztoadpatgimllywgevpt.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0b2FkcGF0Z2ltbGx5d2dldnB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzUzNjYsImV4cCI6MjA3ODgxMTM2Nn0.LCy3P7yc3FIQUhWksiNvnGK5MXDlTTyn_ZNjerckZf8'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hfcsndlyggoxxwmktueu.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmY3NuZGx5Z2dveHh3bWt0dWV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2NjY5MzEsImV4cCI6MjA3OTI0MjkzMX0.KheMHMrXn0HXZnGPyPoV34QeSi4EOBqVnMnmDSuPO-A'
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please check your configuration.')
