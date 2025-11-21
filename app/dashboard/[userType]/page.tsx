@@ -372,6 +372,24 @@ export default function DashboardPage({ params }: { params: { userType: string }
           {/* Dashboard Content */}
           {userType === 'student' ? (
             <div className="space-y-8">
+              {/* Create Course CTA - First Priority */}
+              <div className="relative bg-gradient-to-r from-primary-500 via-primary-600 to-accent rounded-2xl p-8 text-white shadow-2xl overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary-500/20 to-accent/20"></div>
+                <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex-1">
+                    <h3 className="text-3xl font-bold mb-3">Create Your Own Quest</h3>
+                    <p className="text-white/90 text-lg">Start by creating a course to organize your assignments and track your progress</p>
+                  </div>
+                  <button
+                    onClick={openCreateModal}
+                    className="px-8 py-4 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white font-bold rounded-xl hover:bg-white/20 hover:border-white/50 transition-all flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Create Course
+                  </button>
+                </div>
+              </div>
+
               {/* Browse Courses CTA */}
               <div className="relative bg-gradient-to-r from-accent via-accent/90 to-primary-500 rounded-2xl p-8 text-white shadow-2xl overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-accent/20 to-primary-500/20"></div>
