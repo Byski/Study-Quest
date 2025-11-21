@@ -998,6 +998,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
                             <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Status</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Due Date</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Description</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="bg-dark-navy/60 divide-y divide-light/10">
@@ -1018,7 +1019,12 @@ export default function DashboardPage({ params }: { params: { userType: string }
                               >
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-2">
-                                    <div className="text-sm font-medium text-light">{assignment.title}</div>
+                                    <button
+                                      onClick={() => router.push(`/assignments/${assignment.id}`)}
+                                      className="text-sm font-medium text-light hover:text-primary-400 transition-colors text-left"
+                                    >
+                                      {assignment.title}
+                                    </button>
                                     {assignmentStatus === 'completed' && (
                                       <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                                     )}
@@ -1092,6 +1098,14 @@ export default function DashboardPage({ params }: { params: { userType: string }
                                   <div className="text-sm text-light/70 line-clamp-2 max-w-md">
                                     {assignment.description || 'No description'}
                                   </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <button
+                                    onClick={() => router.push(`/assignments/${assignment.id}`)}
+                                    className="text-sm text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                                  >
+                                    View Details
+                                  </button>
                                 </td>
                               </tr>
                             )
@@ -1326,6 +1340,12 @@ export default function DashboardPage({ params }: { params: { userType: string }
                                 <p className="text-light/70 text-sm mb-4 line-clamp-2">{assignment.description}</p>
                               )}
                             </div>
+                            <button
+                              onClick={() => router.push(`/assignments/${assignment.id}`)}
+                              className="text-sm text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                            >
+                              View Details →
+                            </button>
                           </div>
                           
                           <div className={`mt-4 p-3 rounded-xl ${
