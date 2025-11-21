@@ -13,6 +13,8 @@ interface Course {
   difficulty: string
   duration: number
   category: string
+  code?: string
+  color?: string
   created_at?: string
 }
 
@@ -47,7 +49,9 @@ export default function DashboardPage({ params }: { params: { userType: string }
     description: '',
     difficulty: 'beginner' as 'beginner' | 'intermediate' | 'advanced',
     duration: 4,
-    category: ''
+    category: '',
+    code: '',
+    color: '#0F3460'
   })
 
   useEffect(() => {
@@ -154,12 +158,6 @@ export default function DashboardPage({ params }: { params: { userType: string }
         return
       }
 
-      const userType = session.user.user_metadata?.user_type
-      if (userType !== 'admin') {
-        setNotification({ message: 'Only administrators can create courses', type: 'error' })
-        return
-      }
-
       const { data, error } = await supabase
         .from('courses')
         .insert([{
@@ -176,7 +174,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
 
       setCourses([data, ...courses])
       setShowCourseModal(false)
-      setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '' })
+      setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '', code: '', color: '#0F3460' })
       loadStats()
       setNotification({ message: 'Course created successfully!', type: 'success' })
     } catch (error: any) {
@@ -191,8 +189,8 @@ export default function DashboardPage({ params }: { params: { userType: string }
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session || session.user.user_metadata?.user_type !== 'admin') {
-        setNotification({ message: 'Only administrators can update courses', type: 'error' })
+      if (!session) {
+        setNotification({ message: 'You must be logged in to update courses', type: 'error' })
         return
       }
 
@@ -211,7 +209,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
       setCourses(courses.map(c => c.id === editingCourse.id ? data : c))
       setShowCourseModal(false)
       setEditingCourse(null)
-      setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '' })
+      setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '', code: '', color: '#0F3460' })
       setNotification({ message: 'Course updated successfully!', type: 'success' })
     } catch (error: any) {
       console.error('Error updating course:', error)
@@ -248,14 +246,16 @@ export default function DashboardPage({ params }: { params: { userType: string }
       description: course.description,
       difficulty: course.difficulty as 'beginner' | 'intermediate' | 'advanced',
       duration: course.duration,
-      category: course.category
+      category: course.category,
+      code: course.code || '',
+      color: course.color || '#0F3460'
     })
     setShowCourseModal(true)
   }
 
   const openCreateModal = () => {
     setEditingCourse(null)
-    setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '' })
+    setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '', code: '', color: '#0F3460' })
     setShowCourseModal(true)
   }
 
@@ -680,7 +680,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
                   onClick={() => {
                     setShowCourseModal(false)
                     setEditingCourse(null)
-                    setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '' })
+                    setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '', code: '', color: '#0F3460' })
                   }}
                   className="text-light/60 hover:text-light/80"
                 >
@@ -747,6 +747,38 @@ export default function DashboardPage({ params }: { params: { userType: string }
                     placeholder="e.g., Programming, Web Development, Data Science"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-light/90 mb-2">Course Code (Optional)</label>
+                    <input
+                      type="text"
+                      value={courseForm.code}
+                      onChange={(e) => setCourseForm({ ...courseForm, code: e.target.value })}
+                      className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      placeholder="e.g., CS101, MATH201"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-light/90 mb-2">Color (Optional)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={courseForm.color}
+                        onChange={(e) => setCourseForm({ ...courseForm, color: e.target.value })}
+                        className="w-16 h-10 border border-light/30 rounded-xl cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={courseForm.color}
+                        onChange={(e) => setCourseForm({ ...courseForm, color: e.target.value })}
+                        className="flex-1 px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                        placeholder="#0F3460"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="p-6 border-t border-light/20 flex justify-end gap-3">
@@ -754,7 +786,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
                   onClick={() => {
                     setShowCourseModal(false)
                     setEditingCourse(null)
-                    setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '' })
+                    setCourseForm({ title: '', description: '', difficulty: 'beginner', duration: 4, category: '', code: '', color: '#0F3460' })
                   }}
                   className="px-6 py-2 border border-light/30 text-light/90 font-semibold rounded-xl hover:bg-dark-navy/40 transition-colors"
                 >

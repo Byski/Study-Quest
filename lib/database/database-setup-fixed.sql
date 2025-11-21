@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS courses (
   difficulty VARCHAR(20) DEFAULT 'beginner',
   duration INTEGER, -- duration in weeks
   category TEXT,
+  code TEXT,
+  color TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -50,20 +52,20 @@ CREATE POLICY "Anyone can view courses"
   ON courses FOR SELECT
   USING (true);
 
--- Only admins can insert courses
-CREATE POLICY "Only admins can create courses"
+-- Authenticated users can create courses
+CREATE POLICY "Authenticated users can create courses"
   ON courses FOR INSERT
-  WITH CHECK (is_admin(auth.uid()));
+  WITH CHECK (auth.uid() IS NOT NULL);
 
--- Only admins can update courses
-CREATE POLICY "Only admins can update courses"
+-- Authenticated users can update courses
+CREATE POLICY "Authenticated users can update courses"
   ON courses FOR UPDATE
-  USING (is_admin(auth.uid()));
+  USING (auth.uid() IS NOT NULL);
 
--- Only admins can delete courses
-CREATE POLICY "Only admins can delete courses"
+-- Authenticated users can delete courses
+CREATE POLICY "Authenticated users can delete courses"
   ON courses FOR DELETE
-  USING (is_admin(auth.uid()));
+  USING (auth.uid() IS NOT NULL);
 
 -- RLS Policies for enrollments
 -- Users can view their own enrollments
