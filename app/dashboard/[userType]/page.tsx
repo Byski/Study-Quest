@@ -158,19 +158,34 @@ export default function DashboardPage({ params }: { params: { userType: string }
         return
       }
 
+      // Build insert object with all required fields
+      const insertData: any = {
+        title: courseForm.title.trim(),
+        description: courseForm.description?.trim() || null,
+        difficulty: courseForm.difficulty,
+        duration: courseForm.duration,
+        category: courseForm.category?.trim() || null,
+        code: courseForm.code?.trim() || null,
+        color: courseForm.color,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      console.log('Inserting course data:', insertData)
+
       const { data, error } = await supabase
         .from('courses')
-        .insert([{
-          ...courseForm,
-          updated_at: new Date().toISOString()
-        }])
+        .insert([insertData])
         .select()
         .single()
 
       if (error) {
-        console.error('Supabase error:', error)
+        console.error('Supabase insert error:', error)
+        console.error('Error details:', JSON.stringify(error, null, 2))
         throw error
       }
+
+      console.log('Course created successfully:', data)
 
       setCourses([data, ...courses])
       setShowCourseModal(false)
@@ -194,15 +209,34 @@ export default function DashboardPage({ params }: { params: { userType: string }
         return
       }
 
+      // Build update object with all fields
+      const updateData: any = {
+        title: courseForm.title.trim(),
+        description: courseForm.description?.trim() || null,
+        difficulty: courseForm.difficulty,
+        duration: courseForm.duration,
+        category: courseForm.category?.trim() || null,
+        code: courseForm.code?.trim() || null,
+        color: courseForm.color,
+        updated_at: new Date().toISOString()
+      }
+
+      console.log('Updating course data:', updateData)
+
       const { data, error } = await supabase
         .from('courses')
-        .update({
-          ...courseForm,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', editingCourse.id)
         .select()
         .single()
+
+      if (error) {
+        console.error('Supabase update error:', error)
+        console.error('Error details:', JSON.stringify(error, null, 2))
+        throw error
+      }
+
+      console.log('Course updated successfully:', data)
 
       if (error) throw error
 
@@ -794,7 +828,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
                 </button>
                 <button
                   onClick={editingCourse ? handleUpdateCourse : handleCreateCourse}
-                  disabled={!courseForm.title || !courseForm.description || !courseForm.category}
+                  disabled={!courseForm.title.trim()}
                   className="px-6 py-2 bg-gradient-to-r from-primary-500 to-accent text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {editingCourse ? 'Update Course' : 'Create Course'}
