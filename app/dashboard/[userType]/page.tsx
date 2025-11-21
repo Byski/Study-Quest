@@ -31,6 +31,17 @@ interface Stats {
   totalStudents: number
 }
 
+interface Assignment {
+  id: string
+  course_id: string
+  title: string
+  description: string
+  due_date: string
+  status?: string
+  points?: number
+  created_at?: string
+}
+
 export default function DashboardPage({ params }: { params: { userType: string } }) {
   const router = useRouter()
   const userType = params.userType
@@ -53,11 +64,22 @@ export default function DashboardPage({ params }: { params: { userType: string }
     code: '',
     color: '#0F3460'
   })
+  
+  // Assignment states
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false)
+  const [assignmentForm, setAssignmentForm] = useState({
+    title: '',
+    course_id: '',
+    description: '',
+    due_date: '',
+    due_time: ''
+  })
 
   useEffect(() => {
     checkUser()
     if (userType === 'student') {
       loadEnrolledCourses()
+      loadCourses() // Load courses for assignment dropdown
     } else if (userType === 'admin') {
       loadCourses()
       loadStats()
@@ -293,6 +315,77 @@ export default function DashboardPage({ params }: { params: { userType: string }
     setShowCourseModal(true)
   }
 
+  const openCreateAssignmentModal = () => {
+    setAssignmentForm({ title: '', course_id: '', description: '', due_date: '', due_time: '' })
+    setShowAssignmentModal(true)
+  }
+
+  const handleCreateAssignment = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setNotification({ message: 'You must be logged in to create assignments', type: 'error' })
+        return
+      }
+
+      if (!assignmentForm.title.trim()) {
+        setNotification({ message: 'Assignment title is required', type: 'error' })
+        return
+      }
+
+      if (!assignmentForm.course_id) {
+        setNotification({ message: 'Please select a course', type: 'error' })
+        return
+      }
+
+      if (!assignmentForm.due_date) {
+        setNotification({ message: 'Due date is required', type: 'error' })
+        return
+      }
+
+      // Combine date and time into a single timestamp
+      let dueDateTime: string
+      if (assignmentForm.due_time) {
+        dueDateTime = `${assignmentForm.due_date}T${assignmentForm.due_time}:00`
+      } else {
+        dueDateTime = `${assignmentForm.due_date}T23:59:59`
+      }
+
+      const insertData: any = {
+        course_id: assignmentForm.course_id,
+        title: assignmentForm.title.trim(),
+        description: assignmentForm.description?.trim() || null,
+        due_date: dueDateTime,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      console.log('Inserting assignment data:', insertData)
+
+      const { data, error } = await supabase
+        .from('assignments')
+        .insert([insertData])
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Supabase insert error:', error)
+        throw error
+      }
+
+      console.log('Assignment created successfully:', data)
+
+      setShowAssignmentModal(false)
+      setAssignmentForm({ title: '', course_id: '', description: '', due_date: '', due_time: '' })
+      setNotification({ message: 'Assignment created successfully!', type: 'success' })
+    } catch (error: any) {
+      console.error('Error creating assignment:', error)
+      const errorMessage = error.message || 'Unknown error occurred'
+      setNotification({ message: `Failed to create assignment: ${errorMessage}`, type: 'error' })
+    }
+  }
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/')
@@ -420,6 +513,24 @@ export default function DashboardPage({ params }: { params: { userType: string }
                   >
                     <Plus className="w-5 h-5" />
                     Create Course
+                  </button>
+                </div>
+              </div>
+
+              {/* Create Assignment CTA */}
+              <div className="relative bg-gradient-to-r from-green-500 via-green-600 to-emerald-500 rounded-2xl p-8 text-white shadow-2xl overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-500/20"></div>
+                <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex-1">
+                    <h3 className="text-3xl font-bold mb-3">Create Assignment</h3>
+                    <p className="text-white/90 text-lg">Add a new assignment to track your tasks and deadlines</p>
+                  </div>
+                  <button
+                    onClick={openCreateAssignmentModal}
+                    className="px-8 py-4 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white font-bold rounded-xl hover:bg-white/20 hover:border-white/50 transition-all flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105"
+                  >
+                    <FileText className="w-5 h-5" />
+                    Create Assignment
                   </button>
                 </div>
               </div>
@@ -584,13 +695,22 @@ export default function DashboardPage({ params }: { params: { userType: string }
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-2xl font-bold text-light">Course Management</h3>
-                  <button
-                    onClick={openCreateModal}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent text-white font-semibold rounded-xl hover:shadow-lg transition-all"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Create Course
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={openCreateAssignmentModal}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-accent to-accent-dark text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+                    >
+                      <FileText className="w-5 h-5" />
+                      Create Assignment
+                    </button>
+                    <button
+                      onClick={openCreateModal}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Create Course
+                    </button>
+                  </div>
                 </div>
 
                 {loading ? (
@@ -832,6 +952,110 @@ export default function DashboardPage({ params }: { params: { userType: string }
                   className="px-6 py-2 bg-gradient-to-r from-primary-500 to-accent text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {editingCourse ? 'Update Course' : 'Create Course'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Assignment Modal */}
+        {showAssignmentModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-dark-navy/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-primary-500/20">
+              <div className="p-6 border-b border-primary-500/20 flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-light">
+                  Create New Assignment
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowAssignmentModal(false)
+                    setAssignmentForm({ title: '', course_id: '', description: '', due_date: '', due_time: '' })
+                  }}
+                  className="text-light/60 hover:text-light/80"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-light/90 mb-2">Assignment Title *</label>
+                  <input
+                    type="text"
+                    value={assignmentForm.title}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, title: e.target.value })}
+                    className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                    placeholder="e.g., Complete Python Project"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-light/90 mb-2">Course *</label>
+                  <select
+                    value={assignmentForm.course_id}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, course_id: e.target.value })}
+                    className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                  >
+                    <option value="">Select a course</option>
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-light/90 mb-2">Description</label>
+                  <textarea
+                    value={assignmentForm.description}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, description: e.target.value })}
+                    rows={4}
+                    className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                    placeholder="Describe the assignment requirements and objectives..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-light/90 mb-2">Due Date *</label>
+                    <input
+                      type="date"
+                      value={assignmentForm.due_date}
+                      onChange={(e) => setAssignmentForm({ ...assignmentForm, due_date: e.target.value })}
+                      className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-light/90 mb-2">Due Time</label>
+                    <input
+                      type="time"
+                      value={assignmentForm.due_time}
+                      onChange={(e) => setAssignmentForm({ ...assignmentForm, due_time: e.target.value })}
+                      className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-light/20 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowAssignmentModal(false)
+                    setAssignmentForm({ title: '', course_id: '', description: '', due_date: '', due_time: '' })
+                  }}
+                  className="px-6 py-2 border border-light/30 text-light/90 font-semibold rounded-xl hover:bg-dark-navy/40 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateAssignment}
+                  disabled={!assignmentForm.title.trim() || !assignmentForm.course_id || !assignmentForm.due_date}
+                  className="px-6 py-2 bg-gradient-to-r from-accent to-accent-dark text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Assignment
                 </button>
               </div>
             </div>
