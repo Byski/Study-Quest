@@ -43,6 +43,16 @@ interface Assignment {
   courses?: Course
 }
 
+interface AssignmentSubmission {
+  id: string
+  assignment_id: string
+  user_id: string
+  status: string
+  submitted_at?: string
+  created_at?: string
+  updated_at?: string
+}
+
 export default function DashboardPage({ params }: { params: { userType: string } }) {
   const router = useRouter()
   const userType = params.userType
@@ -68,6 +78,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
   
   // Assignment states
   const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState<Record<string, AssignmentSubmission>>({})
   const [showAssignmentModal, setShowAssignmentModal] = useState(false)
   const [assignmentForm, setAssignmentForm] = useState({
     title: '',
@@ -186,6 +197,9 @@ export default function DashboardPage({ params }: { params: { userType: string }
 
   const loadAssignments = async () => {
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
       const { data, error } = await supabase
         .from('assignments')
         .select(`
@@ -196,6 +210,24 @@ export default function DashboardPage({ params }: { params: { userType: string }
 
       if (error) throw error
       setAssignments((data as any) || [])
+
+      // Load assignment submissions for students
+      if (userType === 'student') {
+        const { data: submissionsData, error: submissionsError } = await supabase
+          .from('assignment_submissions')
+          .select('*')
+          .eq('user_id', session.user.id)
+
+        if (submissionsError) {
+          console.error('Error loading submissions:', submissionsError.message)
+        } else {
+          const submissionsMap: Record<string, AssignmentSubmission> = {}
+          submissionsData?.forEach((submission: any) => {
+            submissionsMap[submission.assignment_id] = submission
+          })
+          setAssignmentSubmissions(submissionsMap)
+        }
+      }
     } catch (error: any) {
       console.error('Error loading assignments:', error.message)
       setAssignments([])
@@ -389,7 +421,8 @@ export default function DashboardPage({ params }: { params: { userType: string }
 
       // Filter by status
       if (assignmentFilters.status) {
-        const assignmentStatus = assignment.status || 'pending'
+        const submission = assignmentSubmissions[assignment.id]
+        const assignmentStatus = submission?.status || assignment.status || 'pending'
         if (assignmentFilters.status === 'overdue') {
           const dueDateInfo = formatDueDate(assignment.due_date)
           if (!dueDateInfo.isOverdue) return false
@@ -497,6 +530,86 @@ export default function DashboardPage({ params }: { params: { userType: string }
       console.error('Error creating assignment:', error)
       const errorMessage = error.message || 'Unknown error occurred'
       setNotification({ message: `Failed to create assignment: ${errorMessage}`, type: 'error' })
+    }
+  }
+
+  // Map user-friendly status to database status
+  const mapStatusToDb = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'todo': 'pending',
+      'doing': 'in_progress',
+      'done': 'completed'
+    }
+    return statusMap[status] || status
+  }
+
+  // Map database status to user-friendly status
+  const mapStatusFromDb = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'pending': 'todo',
+      'in_progress': 'doing',
+      'completed': 'done'
+    }
+    return statusMap[status] || status
+  }
+
+  const handleUpdateAssignmentStatus = async (assignmentId: string, newStatus: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setNotification({ message: 'You must be logged in to update assignments', type: 'error' })
+        return
+      }
+
+      const dbStatus = mapStatusToDb(newStatus)
+      const existingSubmission = assignmentSubmissions[assignmentId]
+
+      if (existingSubmission) {
+        // Update existing submission
+        const { data, error } = await supabase
+          .from('assignment_submissions')
+          .update({
+            status: dbStatus,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSubmission.id)
+          .select()
+          .single()
+
+        if (error) throw error
+
+        // Update local state
+        setAssignmentSubmissions({
+          ...assignmentSubmissions,
+          [assignmentId]: data
+        })
+      } else {
+        // Create new submission
+        const { data, error } = await supabase
+          .from('assignment_submissions')
+          .insert({
+            assignment_id: assignmentId,
+            user_id: session.user.id,
+            status: dbStatus,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+
+        // Update local state
+        setAssignmentSubmissions({
+          ...assignmentSubmissions,
+          [assignmentId]: data
+        })
+      }
+
+      setNotification({ message: 'Assignment status updated successfully!', type: 'success' })
+    } catch (error: any) {
+      console.error('Error updating assignment status:', error)
+      setNotification({ message: `Failed to update status: ${error.message}`, type: 'error' })
     }
   }
 
@@ -814,9 +927,9 @@ export default function DashboardPage({ params }: { params: { userType: string }
                         className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
                       >
                         <option value="">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
+                        <option value="pending">Todo</option>
+                        <option value="in_progress">Doing</option>
+                        <option value="completed">Done</option>
                         <option value="overdue">Overdue</option>
                       </select>
                     </div>
@@ -891,7 +1004,11 @@ export default function DashboardPage({ params }: { params: { userType: string }
                           {filteredAssignments.map((assignment) => {
                             const course = assignment.courses as Course
                             const dueDateInfo = formatDueDate(assignment.due_date)
-                            const assignmentStatus = assignment.status || 'pending'
+                            const submission = assignmentSubmissions[assignment.id]
+                            // Use submission status if available, otherwise use assignment status
+                            const dbStatus = submission?.status || assignment.status || 'pending'
+                            const displayStatus = mapStatusFromDb(dbStatus)
+                            const assignmentStatus = dbStatus
                             return (
                               <tr 
                                 key={assignment.id} 
@@ -915,17 +1032,37 @@ export default function DashboardPage({ params }: { params: { userType: string }
                                   )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${
-                                    assignmentStatus === 'completed' 
-                                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                      : assignmentStatus === 'in_progress'
-                                      ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                                      : dueDateInfo.isOverdue
-                                      ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                                      : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                                  }`}>
-                                    {assignmentStatus === 'pending' && dueDateInfo.isOverdue ? 'Overdue' : assignmentStatus}
-                                  </span>
+                                  {userType === 'student' ? (
+                                    <select
+                                      value={displayStatus}
+                                      onChange={(e) => handleUpdateAssignmentStatus(assignment.id, e.target.value)}
+                                      className={`px-3 py-1 text-xs font-semibold rounded-full border outline-none cursor-pointer transition-colors ${
+                                        displayStatus === 'done' 
+                                          ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
+                                          : displayStatus === 'doing'
+                                          ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30'
+                                          : dueDateInfo.isOverdue
+                                          ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30'
+                                          : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/30'
+                                      }`}
+                                    >
+                                      <option value="todo">Todo</option>
+                                      <option value="doing">Doing</option>
+                                      <option value="done">Done</option>
+                                    </select>
+                                  ) : (
+                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${
+                                      assignmentStatus === 'completed' 
+                                        ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                        : assignmentStatus === 'in_progress'
+                                        ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                        : dueDateInfo.isOverdue
+                                        ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                        : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                                    }`}>
+                                      {assignmentStatus === 'pending' && dueDateInfo.isOverdue ? 'Overdue' : assignmentStatus}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-2">
