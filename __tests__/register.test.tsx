@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
+import '@testing-library/jest-dom';
 import AuthPage from '@/app/auth/page';
 import * as supabaseModule from '@/lib/supabase';
 
@@ -33,10 +34,10 @@ describe('Register Flow', () => {
     const user = userEvent.setup();
     render(<AuthPage />);
 
-    const registerButton = screen.getByRole('button', { name: /register/i });
+    const registerButton = screen.getByRole('button', { name: /sign up/i });
     await user.click(registerButton);
 
-    expect(screen.getByRole('heading', { name: /register/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /join the quest/i })).toBeInTheDocument();
   });
 
   it('should call signUp with correct data and user_type in metadata', async () => {
@@ -49,8 +50,12 @@ describe('Register Flow', () => {
     render(<AuthPage />);
 
     // Switch to register
-    const registerButton = screen.getByRole('button', { name: /register/i });
+    const registerButton = screen.getByRole('button', { name: /sign up/i });
     await user.click(registerButton);
+
+    // Select user type (required for registration)
+    const studentButton = screen.getByRole('button', { name: /student/i });
+    await user.click(studentButton);
 
     // Fill form
     await user.type(screen.getByLabelText(/email/i), 'test@example.com');
