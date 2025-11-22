@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { BookOpen, LogOut, User, Shield, Sword, ArrowRight, CheckCircle, Plus, Edit, Trash2, Users, BookMarked, TrendingUp, X, FileText, Calendar } from 'lucide-react'
+import { BookOpen, LogOut, User, Shield, Sword, ArrowRight, CheckCircle, Plus, Edit, Trash2, Users, BookMarked, TrendingUp, X, FileText, Calendar, Filter } from 'lucide-react'
 import Notification from '@/components/Notification'
 
 interface Course {
@@ -31,6 +31,28 @@ interface Stats {
   totalStudents: number
 }
 
+interface Assignment {
+  id: string
+  course_id: string
+  title: string
+  description: string
+  due_date: string
+  status?: string
+  points?: number
+  created_at?: string
+  courses?: Course
+}
+
+interface AssignmentSubmission {
+  id: string
+  assignment_id: string
+  user_id: string
+  status: string
+  submitted_at?: string
+  created_at?: string
+  updated_at?: string
+}
+
 export default function DashboardPage({ params }: { params: { userType: string } }) {
   const router = useRouter()
   const userType = params.userType
@@ -53,14 +75,37 @@ export default function DashboardPage({ params }: { params: { userType: string }
     code: '',
     color: '#0F3460'
   })
+  
+  // Assignment states
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState<Record<string, AssignmentSubmission>>({})
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false)
+  const [assignmentForm, setAssignmentForm] = useState({
+    title: '',
+    course_id: '',
+    description: '',
+    due_date: '',
+    due_time: ''
+  })
+  
+  // Assignment filters (for students)
+  const [assignmentFilters, setAssignmentFilters] = useState({
+    course_id: '',
+    status: '',
+    due_date_from: '',
+    due_date_to: ''
+  })
 
   useEffect(() => {
     checkUser()
     if (userType === 'student') {
       loadEnrolledCourses()
+      loadCourses() // Load courses for assignment dropdown
+      loadAssignments()
     } else if (userType === 'admin') {
       loadCourses()
       loadStats()
+      loadAssignments()
     }
   }, [userType])
 
@@ -147,6 +192,45 @@ export default function DashboardPage({ params }: { params: { userType: string }
       })
     } catch (error: any) {
       console.error('Error loading stats:', error.message)
+    }
+  }
+
+  const loadAssignments = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const { data, error } = await supabase
+        .from('assignments')
+        .select(`
+          *,
+          courses (*)
+        `)
+        .order('due_date', { ascending: true })
+
+      if (error) throw error
+      setAssignments((data as any) || [])
+
+      // Load assignment submissions for students
+      if (userType === 'student') {
+        const { data: submissionsData, error: submissionsError } = await supabase
+          .from('assignment_submissions')
+          .select('*')
+          .eq('user_id', session.user.id)
+
+        if (submissionsError) {
+          console.error('Error loading submissions:', submissionsError.message)
+        } else {
+          const submissionsMap: Record<string, AssignmentSubmission> = {}
+          submissionsData?.forEach((submission: any) => {
+            submissionsMap[submission.assignment_id] = submission
+          })
+          setAssignmentSubmissions(submissionsMap)
+        }
+      }
+    } catch (error: any) {
+      console.error('Error loading assignments:', error.message)
+      setAssignments([])
     }
   }
 
@@ -293,6 +377,242 @@ export default function DashboardPage({ params }: { params: { userType: string }
     setShowCourseModal(true)
   }
 
+  const openCreateAssignmentModal = () => {
+    setAssignmentForm({ title: '', course_id: '', description: '', due_date: '', due_time: '' })
+    setShowAssignmentModal(true)
+  }
+
+  const formatDueDate = (dueDate: string): { text: string; isOverdue: boolean; days: number; isToday?: boolean; isSoon?: boolean } => {
+    if (!dueDate) {
+      return { text: 'No due date', isOverdue: false, days: 0 }
+    }
+    const date = new Date(dueDate)
+    const now = new Date()
+    const diffTime = date.getTime() - now.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    const formattedDate = date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+
+    if (diffDays < 0) {
+      return { text: `Overdue: ${formattedDate}`, isOverdue: true, days: diffDays }
+    } else if (diffDays === 0) {
+      return { text: `Due today: ${formattedDate}`, isOverdue: false, days: 0, isToday: true }
+    } else if (diffDays === 1) {
+      return { text: `Due tomorrow: ${formattedDate}`, isOverdue: false, days: 1, isSoon: true }
+    } else if (diffDays <= 7) {
+      return { text: `Due in ${diffDays} days: ${formattedDate}`, isOverdue: false, days: diffDays, isSoon: true }
+    } else {
+      return { text: `Due: ${formattedDate}`, isOverdue: false, days: diffDays }
+    }
+  }
+
+  const filterAssignments = (assignmentsList: Assignment[]) => {
+    return assignmentsList.filter((assignment) => {
+      // Filter by course
+      if (assignmentFilters.course_id && assignment.course_id !== assignmentFilters.course_id) {
+        return false
+      }
+
+      // Filter by status
+      if (assignmentFilters.status) {
+        const submission = assignmentSubmissions[assignment.id]
+        const assignmentStatus = submission?.status || assignment.status || 'pending'
+        if (assignmentFilters.status === 'overdue') {
+          const dueDateInfo = formatDueDate(assignment.due_date)
+          if (!dueDateInfo.isOverdue) return false
+        } else if (assignmentStatus !== assignmentFilters.status) {
+          return false
+        }
+      }
+
+      // Filter by due date range
+      if (assignmentFilters.due_date_from || assignmentFilters.due_date_to) {
+        if (!assignment.due_date) return false
+        
+        const assignmentDate = new Date(assignment.due_date)
+        assignmentDate.setHours(0, 0, 0, 0)
+
+        if (assignmentFilters.due_date_from) {
+          const fromDate = new Date(assignmentFilters.due_date_from)
+          fromDate.setHours(0, 0, 0, 0)
+          if (assignmentDate < fromDate) return false
+        }
+
+        if (assignmentFilters.due_date_to) {
+          const toDate = new Date(assignmentFilters.due_date_to)
+          toDate.setHours(23, 59, 59, 999)
+          if (assignmentDate > toDate) return false
+        }
+      }
+
+      return true
+    })
+  }
+
+  const filteredAssignments = userType === 'student' ? filterAssignments(assignments) : assignments
+
+  const clearFilters = () => {
+    setAssignmentFilters({
+      course_id: '',
+      status: '',
+      due_date_from: '',
+      due_date_to: ''
+    })
+  }
+
+  const handleCreateAssignment = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setNotification({ message: 'You must be logged in to create assignments', type: 'error' })
+        return
+      }
+
+      if (!assignmentForm.title.trim()) {
+        setNotification({ message: 'Assignment title is required', type: 'error' })
+        return
+      }
+
+      if (!assignmentForm.course_id) {
+        setNotification({ message: 'Please select a course', type: 'error' })
+        return
+      }
+
+      if (!assignmentForm.due_date) {
+        setNotification({ message: 'Due date is required', type: 'error' })
+        return
+      }
+
+      // Combine date and time into a single timestamp
+      let dueDateTime: string
+      if (assignmentForm.due_time) {
+        dueDateTime = `${assignmentForm.due_date}T${assignmentForm.due_time}:00`
+      } else {
+        dueDateTime = `${assignmentForm.due_date}T23:59:59`
+      }
+
+      const insertData: any = {
+        course_id: assignmentForm.course_id,
+        title: assignmentForm.title.trim(),
+        description: assignmentForm.description?.trim() || null,
+        due_date: dueDateTime,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      console.log('Inserting assignment data:', insertData)
+
+      const { data, error } = await supabase
+        .from('assignments')
+        .insert([insertData])
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Supabase insert error:', error)
+        throw error
+      }
+
+      console.log('Assignment created successfully:', data)
+
+      setShowAssignmentModal(false)
+      setAssignmentForm({ title: '', course_id: '', description: '', due_date: '', due_time: '' })
+      loadAssignments() // Reload assignments after creation
+      setNotification({ message: 'Assignment created successfully!', type: 'success' })
+    } catch (error: any) {
+      console.error('Error creating assignment:', error)
+      const errorMessage = error.message || 'Unknown error occurred'
+      setNotification({ message: `Failed to create assignment: ${errorMessage}`, type: 'error' })
+    }
+  }
+
+  // Map user-friendly status to database status
+  const mapStatusToDb = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'todo': 'pending',
+      'doing': 'in_progress',
+      'done': 'completed'
+    }
+    return statusMap[status] || status
+  }
+
+  // Map database status to user-friendly status
+  const mapStatusFromDb = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'pending': 'todo',
+      'in_progress': 'doing',
+      'completed': 'done'
+    }
+    return statusMap[status] || status
+  }
+
+  const handleUpdateAssignmentStatus = async (assignmentId: string, newStatus: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setNotification({ message: 'You must be logged in to update assignments', type: 'error' })
+        return
+      }
+
+      const dbStatus = mapStatusToDb(newStatus)
+      const existingSubmission = assignmentSubmissions[assignmentId]
+
+      if (existingSubmission) {
+        // Update existing submission
+        const { data, error } = await supabase
+          .from('assignment_submissions')
+          .update({
+            status: dbStatus,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSubmission.id)
+          .select()
+          .single()
+
+        if (error) throw error
+
+        // Update local state
+        setAssignmentSubmissions({
+          ...assignmentSubmissions,
+          [assignmentId]: data
+        })
+      } else {
+        // Create new submission
+        const { data, error } = await supabase
+          .from('assignment_submissions')
+          .insert({
+            assignment_id: assignmentId,
+            user_id: session.user.id,
+            status: dbStatus,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+
+        // Update local state
+        setAssignmentSubmissions({
+          ...assignmentSubmissions,
+          [assignmentId]: data
+        })
+      }
+
+      setNotification({ message: 'Assignment status updated successfully!', type: 'success' })
+    } catch (error: any) {
+      console.error('Error updating assignment status:', error)
+      setNotification({ message: `Failed to update status: ${error.message}`, type: 'error' })
+    }
+  }
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/')
@@ -424,6 +744,24 @@ export default function DashboardPage({ params }: { params: { userType: string }
                 </div>
               </div>
 
+              {/* Create Assignment CTA */}
+              <div className="relative bg-gradient-to-r from-green-500 via-green-600 to-emerald-500 rounded-2xl p-8 text-white shadow-2xl overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-500/20"></div>
+                <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex-1">
+                    <h3 className="text-3xl font-bold mb-3">Create Assignment</h3>
+                    <p className="text-white/90 text-lg">Add a new assignment to track your tasks and deadlines</p>
+                  </div>
+                  <button
+                    onClick={openCreateAssignmentModal}
+                    className="px-8 py-4 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white font-bold rounded-xl hover:bg-white/20 hover:border-white/50 transition-all flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105"
+                  >
+                    <FileText className="w-5 h-5" />
+                    Create Assignment
+                  </button>
+                </div>
+              </div>
+
               {/* Browse Courses CTA */}
               <div className="relative bg-gradient-to-r from-accent via-accent/90 to-primary-500 rounded-2xl p-8 text-white shadow-2xl overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-accent/20 to-primary-500/20"></div>
@@ -538,6 +876,246 @@ export default function DashboardPage({ params }: { params: { userType: string }
                   </div>
                 )}
               </div>
+
+              {/* Assignments Section */}
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-light flex items-center gap-3">
+                    <FileText className="w-6 h-6 text-primary-500" />
+                    My Assignments
+                  </h3>
+                </div>
+
+                {/* Filters */}
+                <div className="bg-dark-navy/60 backdrop-blur-sm border-2 border-primary-500/20 rounded-2xl p-6 mb-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Filter className="w-5 h-5 text-primary-400" />
+                    <h4 className="text-lg font-semibold text-light">Filter Assignments</h4>
+                    {(assignmentFilters.course_id || assignmentFilters.status || assignmentFilters.due_date_from || assignmentFilters.due_date_to) && (
+                      <button
+                        onClick={clearFilters}
+                        className="ml-auto text-sm text-primary-400 hover:text-primary-300 underline"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Course Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-light/90 mb-2">Course</label>
+                      <select
+                        value={assignmentFilters.course_id}
+                        onChange={(e) => setAssignmentFilters({ ...assignmentFilters, course_id: e.target.value })}
+                        className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      >
+                        <option value="">All Courses</option>
+                        {courses.map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Status Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-light/90 mb-2">Status</label>
+                      <select
+                        value={assignmentFilters.status}
+                        onChange={(e) => setAssignmentFilters({ ...assignmentFilters, status: e.target.value })}
+                        className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      >
+                        <option value="">All Status</option>
+                        <option value="pending">Todo</option>
+                        <option value="in_progress">Doing</option>
+                        <option value="completed">Done</option>
+                        <option value="overdue">Overdue</option>
+                      </select>
+                    </div>
+
+                    {/* Due Date From */}
+                    <div>
+                      <label className="block text-sm font-medium text-light/90 mb-2">Due From</label>
+                      <input
+                        type="date"
+                        value={assignmentFilters.due_date_from}
+                        onChange={(e) => setAssignmentFilters({ ...assignmentFilters, due_date_from: e.target.value })}
+                        className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      />
+                    </div>
+
+                    {/* Due Date To */}
+                    <div>
+                      <label className="block text-sm font-medium text-light/90 mb-2">Due To</label>
+                      <input
+                        type="date"
+                        value={assignmentFilters.due_date_to}
+                        onChange={(e) => setAssignmentFilters({ ...assignmentFilters, due_date_to: e.target.value })}
+                        min={assignmentFilters.due_date_from || undefined}
+                        className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {assignments.length === 0 ? (
+                  <div className="text-center py-16 border-2 border-dashed border-primary-500/30 rounded-2xl bg-dark-navy/40 backdrop-blur-sm">
+                    <div className="w-20 h-20 bg-primary-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <FileText className="w-10 h-10 text-primary-500/60" />
+                    </div>
+                    <h4 className="text-xl font-semibold text-light mb-2">No Assignments Yet</h4>
+                    <p className="text-light/70 mb-6 max-w-md mx-auto">Create your first assignment to get started!</p>
+                    <button
+                      onClick={openCreateAssignmentModal}
+                      className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:shadow-xl transition-all transform hover:scale-105"
+                    >
+                      Create Assignment
+                    </button>
+                  </div>
+                ) : filteredAssignments.length === 0 ? (
+                  <div className="text-center py-16 border-2 border-dashed border-primary-500/30 rounded-2xl bg-dark-navy/40 backdrop-blur-sm">
+                    <div className="w-20 h-20 bg-primary-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Filter className="w-10 h-10 text-primary-500/60" />
+                    </div>
+                    <h4 className="text-xl font-semibold text-light mb-2">No Assignments Match Filters</h4>
+                    <p className="text-light/70 mb-6 max-w-md mx-auto">Try adjusting your filters to see more assignments</p>
+                    <button
+                      onClick={clearFilters}
+                      className="px-8 py-3 bg-gradient-to-r from-primary-500 to-accent text-white font-semibold rounded-xl hover:shadow-xl transition-all transform hover:scale-105"
+                    >
+                      Clear Filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-dark-navy/80 rounded-xl shadow-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-dark-navy/40">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Title</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Course</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Due Date</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Description</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-light/70 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-dark-navy/60 divide-y divide-light/10">
+                          {filteredAssignments.map((assignment) => {
+                            const course = assignment.courses as Course
+                            const dueDateInfo = formatDueDate(assignment.due_date)
+                            const submission = assignmentSubmissions[assignment.id]
+                            // Use submission status if available, otherwise use assignment status
+                            const dbStatus = submission?.status || assignment.status || 'pending'
+                            const displayStatus = mapStatusFromDb(dbStatus)
+                            const assignmentStatus = dbStatus
+                            return (
+                              <tr 
+                                key={assignment.id} 
+                                className={`hover:bg-primary-500/10 transition-colors ${
+                                  dueDateInfo.isOverdue ? 'bg-red-500/5' : ''
+                                }`}
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => router.push(`/assignments/${assignment.id}`)}
+                                      className="text-sm font-medium text-light hover:text-primary-400 transition-colors text-left"
+                                    >
+                                      {assignment.title}
+                                    </button>
+                                    {assignmentStatus === 'completed' && (
+                                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {course ? (
+                                    <span className="text-sm text-primary-400 font-medium">{course.title}</span>
+                                  ) : (
+                                    <span className="text-sm text-light/50">N/A</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {userType === 'student' ? (
+                                    <select
+                                      value={displayStatus}
+                                      onChange={(e) => handleUpdateAssignmentStatus(assignment.id, e.target.value)}
+                                      className={`px-3 py-1 text-xs font-semibold rounded-full border outline-none cursor-pointer transition-colors ${
+                                        displayStatus === 'done' 
+                                          ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
+                                          : displayStatus === 'doing'
+                                          ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30'
+                                          : dueDateInfo.isOverdue
+                                          ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30'
+                                          : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/30'
+                                      }`}
+                                    >
+                                      <option value="todo">Todo</option>
+                                      <option value="doing">Doing</option>
+                                      <option value="done">Done</option>
+                                    </select>
+                                  ) : (
+                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${
+                                      assignmentStatus === 'completed' 
+                                        ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                        : assignmentStatus === 'in_progress'
+                                        ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                        : dueDateInfo.isOverdue
+                                        ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                        : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                                    }`}>
+                                      {assignmentStatus === 'pending' && dueDateInfo.isOverdue ? 'Overdue' : assignmentStatus}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <Calendar className={`w-4 h-4 ${
+                                      dueDateInfo.isOverdue 
+                                        ? 'text-red-400' 
+                                        : dueDateInfo.isToday 
+                                        ? 'text-yellow-400'
+                                        : dueDateInfo.isSoon
+                                        ? 'text-orange-400'
+                                        : 'text-primary-400'
+                                    }`} />
+                                    <span className={`text-sm font-medium ${
+                                      dueDateInfo.isOverdue 
+                                        ? 'text-red-400' 
+                                        : dueDateInfo.isToday 
+                                        ? 'text-yellow-400'
+                                        : dueDateInfo.isSoon
+                                        ? 'text-orange-400'
+                                        : 'text-light/90'
+                                    }`}>
+                                      {dueDateInfo.text}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="text-sm text-light/70 line-clamp-2 max-w-md">
+                                    {assignment.description || 'No description'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <button
+                                    onClick={() => router.push(`/assignments/${assignment.id}`)}
+                                    className="text-sm text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                                  >
+                                    View Details
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-8">
@@ -584,13 +1162,22 @@ export default function DashboardPage({ params }: { params: { userType: string }
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-2xl font-bold text-light">Course Management</h3>
-                  <button
-                    onClick={openCreateModal}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent text-white font-semibold rounded-xl hover:shadow-lg transition-all"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Create Course
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={openCreateAssignmentModal}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-accent to-accent-dark text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+                    >
+                      <FileText className="w-5 h-5" />
+                      Create Assignment
+                    </button>
+                    <button
+                      onClick={openCreateModal}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-accent text-white font-semibold rounded-xl hover:shadow-lg transition-all"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Create Course
+                    </button>
+                  </div>
                 </div>
 
                 {loading ? (
@@ -696,6 +1283,106 @@ export default function DashboardPage({ params }: { params: { userType: string }
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Assignments Management */}
+              <div>
+                <h3 className="text-2xl font-bold text-light mb-6 flex items-center gap-3">
+                  <FileText className="w-6 h-6 text-primary-500" />
+                  Assignments
+                </h3>
+                {assignments.length === 0 ? (
+                  <div className="text-center py-16 border-2 border-dashed border-primary-500/30 rounded-2xl bg-dark-navy/40 backdrop-blur-sm">
+                    <div className="w-20 h-20 bg-primary-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <FileText className="w-10 h-10 text-primary-500/60" />
+                    </div>
+                    <h4 className="text-xl font-semibold text-light mb-2">No Assignments Yet</h4>
+                    <p className="text-light/70 mb-6">Create your first assignment to get started!</p>
+                    <button
+                      onClick={openCreateAssignmentModal}
+                      className="px-8 py-3 bg-gradient-to-r from-accent to-accent-dark text-white font-semibold rounded-xl hover:shadow-xl transition-all transform hover:scale-105"
+                    >
+                      Create Assignment
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {assignments.map((assignment) => {
+                      const course = assignment.courses as Course
+                      const dueDateInfo = formatDueDate(assignment.due_date)
+                      return (
+                        <div
+                          key={assignment.id}
+                          className={`group bg-dark-navy/60 backdrop-blur-sm border-2 rounded-2xl p-6 hover:shadow-xl transition-all transform hover:scale-[1.02] ${
+                            dueDateInfo.isOverdue 
+                              ? 'border-red-500/50 hover:border-red-500' 
+                              : dueDateInfo.isToday 
+                              ? 'border-yellow-500/50 hover:border-yellow-500'
+                              : dueDateInfo.isSoon
+                              ? 'border-orange-500/50 hover:border-orange-500'
+                              : 'border-primary-500/20 hover:border-primary-500/50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h4 className="text-lg font-bold text-light">{assignment.title}</h4>
+                                {assignment.status === 'completed' && (
+                                  <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                                )}
+                              </div>
+                              {course && (
+                                <p className="text-primary-400 text-sm mb-2 font-medium">{course.title}</p>
+                              )}
+                              {assignment.description && (
+                                <p className="text-light/70 text-sm mb-4 line-clamp-2">{assignment.description}</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => router.push(`/assignments/${assignment.id}`)}
+                              className="text-sm text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                            >
+                              View Details →
+                            </button>
+                          </div>
+                          
+                          <div className={`mt-4 p-3 rounded-xl ${
+                            dueDateInfo.isOverdue 
+                              ? 'bg-red-500/20 border border-red-500/30' 
+                              : dueDateInfo.isToday 
+                              ? 'bg-yellow-500/20 border border-yellow-500/30'
+                              : dueDateInfo.isSoon
+                              ? 'bg-orange-500/20 border border-orange-500/30'
+                              : 'bg-primary-500/20 border border-primary-500/30'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <Calendar className={`w-4 h-4 ${
+                                dueDateInfo.isOverdue 
+                                  ? 'text-red-400' 
+                                  : dueDateInfo.isToday 
+                                  ? 'text-yellow-400'
+                                  : dueDateInfo.isSoon
+                                  ? 'text-orange-400'
+                                  : 'text-primary-400'
+                              }`} />
+                              <span className={`text-sm font-semibold ${
+                                dueDateInfo.isOverdue 
+                                  ? 'text-red-400' 
+                                  : dueDateInfo.isToday 
+                                  ? 'text-yellow-400'
+                                  : dueDateInfo.isSoon
+                                  ? 'text-orange-400'
+                                  : 'text-primary-400'
+                              }`}>
+                                {dueDateInfo.text}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -832,6 +1519,110 @@ export default function DashboardPage({ params }: { params: { userType: string }
                   className="px-6 py-2 bg-gradient-to-r from-primary-500 to-accent text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {editingCourse ? 'Update Course' : 'Create Course'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Assignment Modal */}
+        {showAssignmentModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-dark-navy/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-primary-500/20">
+              <div className="p-6 border-b border-primary-500/20 flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-light">
+                  Create New Assignment
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowAssignmentModal(false)
+                    setAssignmentForm({ title: '', course_id: '', description: '', due_date: '', due_time: '' })
+                  }}
+                  className="text-light/60 hover:text-light/80"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-light/90 mb-2">Assignment Title *</label>
+                  <input
+                    type="text"
+                    value={assignmentForm.title}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, title: e.target.value })}
+                    className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                    placeholder="e.g., Complete Python Project"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-light/90 mb-2">Course *</label>
+                  <select
+                    value={assignmentForm.course_id}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, course_id: e.target.value })}
+                    className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                  >
+                    <option value="">Select a course</option>
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-light/90 mb-2">Description</label>
+                  <textarea
+                    value={assignmentForm.description}
+                    onChange={(e) => setAssignmentForm({ ...assignmentForm, description: e.target.value })}
+                    rows={4}
+                    className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                    placeholder="Describe the assignment requirements and objectives..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-light/90 mb-2">Due Date *</label>
+                    <input
+                      type="date"
+                      value={assignmentForm.due_date}
+                      onChange={(e) => setAssignmentForm({ ...assignmentForm, due_date: e.target.value })}
+                      className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-light/90 mb-2">Due Time</label>
+                    <input
+                      type="time"
+                      value={assignmentForm.due_time}
+                      onChange={(e) => setAssignmentForm({ ...assignmentForm, due_time: e.target.value })}
+                      className="w-full px-4 py-2 border border-light/30 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-light bg-dark-navy/80"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-light/20 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowAssignmentModal(false)
+                    setAssignmentForm({ title: '', course_id: '', description: '', due_date: '', due_time: '' })
+                  }}
+                  className="px-6 py-2 border border-light/30 text-light/90 font-semibold rounded-xl hover:bg-dark-navy/40 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateAssignment}
+                  disabled={!assignmentForm.title.trim() || !assignmentForm.course_id || !assignmentForm.due_date}
+                  className="px-6 py-2 bg-gradient-to-r from-accent to-accent-dark text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Assignment
                 </button>
               </div>
             </div>
