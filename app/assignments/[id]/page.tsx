@@ -69,26 +69,21 @@ export default function AssignmentDetailPage() {
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
 
   useEffect(() => {
-    checkUser()
     loadAssignment()
   }, [assignmentId])
-
-  const checkUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      router.push('/auth')
-      return
-    }
-    
-    const userTypeFromMeta = session.user.user_metadata?.user_type || 'student'
-    setUserType(userTypeFromMeta)
-  }
 
   const loadAssignment = async () => {
     try {
       setLoading(true)
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      if (!session) {
+        router.push('/auth')
+        return
+      }
+      
+      // Set user type from session
+      const userTypeFromMeta = session.user.user_metadata?.user_type || 'student'
+      setUserType(userTypeFromMeta)
 
       // Load assignment with course details
       const { data: assignmentData, error: assignmentError } = await supabase
@@ -104,7 +99,7 @@ export default function AssignmentDetailPage() {
       setAssignment(assignmentData as Assignment)
 
       // Load submission if user is a student
-      if (userType === 'student') {
+      if (userTypeFromMeta === 'student') {
         const { data: submissionData, error: submissionError } = await supabase
           .from('assignment_submissions')
           .select('*')
