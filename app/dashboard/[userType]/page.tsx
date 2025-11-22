@@ -783,18 +783,6 @@ export default function DashboardPage({ params }: { params: { userType: string }
               {/* Quick Actions */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <button
-                  onClick={() => router.push('/assignments/student')}
-                  className="group p-6 bg-dark-navy/60 backdrop-blur-sm border-2 border-primary-500/30 rounded-2xl hover:border-primary-500 hover:bg-primary-500/10 transition-all text-left shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
-                >
-                  <div className="flex items-center gap-4 mb-3">
-                    <div className="p-3 bg-primary-500/20 rounded-xl group-hover:bg-primary-500/30 transition-colors">
-                      <FileText className="w-6 h-6 text-primary-400" />
-                    </div>
-                    <h3 className="text-xl font-bold text-light">My Assignments</h3>
-                  </div>
-                  <p className="text-light/70 text-sm ml-14">View and manage your assignments</p>
-                </button>
-                <button
                   onClick={() => router.push('/courses')}
                   className="group p-6 bg-dark-navy/60 backdrop-blur-sm border-2 border-primary-500/30 rounded-2xl hover:border-primary-500 hover:bg-primary-500/10 transition-all text-left shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
                 >
