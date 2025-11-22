@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { BookOpen, LogOut, User, Shield, Sword, ArrowRight, CheckCircle, Plus, Edit, Trash2, Users, BookMarked, TrendingUp, X, FileText, Calendar, Filter } from 'lucide-react'
 import Notification from '@/components/Notification'
-import MetricsDashboard from '@/components/MetricsDashboard'
-import { calculateMetrics, StudyMetrics } from '@/lib/metrics'
 
 interface Course {
   id: string
@@ -97,9 +95,6 @@ export default function DashboardPage({ params }: { params: { userType: string }
     due_date_from: '',
     due_date_to: ''
   })
-
-  // Metrics state (for admin)
-  const [metrics, setMetrics] = useState<StudyMetrics | null>(null)
 
   useEffect(() => {
     checkUser()
@@ -216,7 +211,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
       if (error) throw error
       setAssignments((data as any) || [])
 
-      // Load assignment submissions
+      // Load assignment submissions for students
       if (userType === 'student') {
         const { data: submissionsData, error: submissionsError } = await supabase
           .from('assignment_submissions')
@@ -231,50 +226,6 @@ export default function DashboardPage({ params }: { params: { userType: string }
             submissionsMap[submission.assignment_id] = submission
           })
           setAssignmentSubmissions(submissionsMap)
-        }
-      } else if (userType === 'admin') {
-        // Load all submissions for admin metrics
-        const { data: submissionsData, error: submissionsError } = await supabase
-          .from('assignment_submissions')
-          .select('*')
-
-        if (submissionsError) {
-          console.error('Error loading submissions:', submissionsError.message)
-        } else {
-          // For admin metrics, we aggregate all submissions
-          // Group by assignment_id and aggregate data (for admin view of overall performance)
-          const submissionsMap: Record<string, any> = {}
-          submissionsData?.forEach((submission: any) => {
-            const assignmentId = submission.assignment_id
-            if (!submissionsMap[assignmentId]) {
-              submissionsMap[assignmentId] = {
-                ...submission,
-                // Aggregate: count completed submissions
-                completed_count: submission.status === 'completed' || submission.status === 'submitted' ? 1 : 0,
-                // Use average estimated/actual hours if multiple submissions exist
-                estimated_hours: submission.estimated_hours || 0,
-                actual_hours: submission.actual_hours || 0,
-              }
-            } else {
-              // Aggregate multiple submissions for same assignment
-              if (submission.status === 'completed' || submission.status === 'submitted') {
-                submissionsMap[assignmentId].completed_count = (submissionsMap[assignmentId].completed_count || 0) + 1
-              }
-              // Use the most recent submission's hours data
-              if (new Date(submission.updated_at || submission.created_at) > 
-                  new Date(submissionsMap[assignmentId].updated_at || submissionsMap[assignmentId].created_at || '')) {
-                submissionsMap[assignmentId].estimated_hours = submission.estimated_hours || submissionsMap[assignmentId].estimated_hours || 0
-                submissionsMap[assignmentId].actual_hours = submission.actual_hours || submissionsMap[assignmentId].actual_hours || 0
-                submissionsMap[assignmentId].status = submission.status
-                submissionsMap[assignmentId].updated_at = submission.updated_at || submission.created_at
-              }
-            }
-          })
-          setAssignmentSubmissions(submissionsMap)
-          
-          // Calculate metrics for admin (aggregated view)
-          const calculatedMetrics = calculateMetrics(data as any, submissionsMap)
-          setMetrics(calculatedMetrics)
         }
       }
     } catch (error: any) {
@@ -1206,17 +1157,6 @@ export default function DashboardPage({ params }: { params: { userType: string }
                   </div>
                 </div>
               </div>
-
-              {/* Metrics Dashboard for Admin */}
-              {metrics && (
-                <div>
-                  <h3 className="text-2xl font-bold text-light mb-6 flex items-center gap-3">
-                    <TrendingUp className="w-6 h-6 text-primary-500" />
-                    Performance Metrics Dashboard
-                  </h3>
-                  <MetricsDashboard metrics={metrics} />
-                </div>
-              )}
 
               {/* Course Management */}
               <div>

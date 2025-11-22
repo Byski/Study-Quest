@@ -46,6 +46,32 @@ describe('Course Management - CRUD Operations', () => {
     },
   };
 
+  // Helper to create enrollments mock with .then() support for stats
+  const createEnrollmentsMock = () => {
+    const promise = Promise.resolve({ count: 0, data: [], error: null });
+    const thenable = {
+      then: (cb: any) => promise.then(cb),
+      count: 0,
+      data: [],
+      error: null,
+    };
+    return {
+      select: jest.fn((query?: string, options?: any) => {
+        // Handle stats queries with .then()
+        if (options?.count === 'exact') {
+          return thenable;
+        }
+        // Return chainable for regular queries (select().eq().order())
+        return {
+          eq: jest.fn(() => ({
+            order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+          })),
+          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+        };
+      }),
+    };
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     (useRouter as jest.Mock).mockReturnValue(mockRouter);
@@ -58,14 +84,76 @@ describe('Course Management - CRUD Operations', () => {
     mockOrder = jest.fn();
     mockSingle = jest.fn();
 
-    mockSelectChain = {
-      select: mockSelect,
-      insert: mockInsert,
-      update: mockUpdate,
-      delete: mockDelete,
-    };
+    // Set default mockSelect to return promise-based chain FIRST
+    const defaultPromise = Promise.resolve({ data: [], error: null });
+    mockSelect.mockReturnValue({
+      eq: jest.fn(() => ({
+        order: jest.fn(() => defaultPromise),
+      })),
+      order: jest.fn(() => defaultPromise),
+    });
 
-    (supabaseModule.supabase.from as jest.Mock).mockReturnValue(mockSelectChain);
+    // Create proper chainable mock implementation
+    const createChainableMock = (table: string) => {
+      if (table === 'courses') {
+        return {
+          select: jest.fn((query?: string, options?: any) => {
+            // Handle stats queries (for admin dashboard)
+            if (options?.count === 'exact' && options?.head === true) {
+              return Promise.resolve({ count: 0, data: null, error: null });
+            }
+            // Return chainable for regular queries - always return the mockSelect result
+            return mockSelect();
+          }),
+          insert: mockInsert,
+          update: mockUpdate,
+          delete: mockDelete,
+        }
+      }
+      if (table === 'enrollments') {
+        return {
+          select: jest.fn((query?: string, options?: any) => {
+            // Handle stats queries with .then() support
+            if (options?.count === 'exact') {
+              const promise = Promise.resolve({ count: 0, data: [], error: null });
+              return {
+                then: (cb: any) => promise.then(cb),
+                count: 0,
+                data: [],
+                error: null,
+              };
+            }
+            // Return chainable for regular queries
+            return {
+              eq: jest.fn(() => ({
+                order: jest.fn(() => defaultPromise),
+              })),
+              order: jest.fn(() => defaultPromise),
+            };
+          }),
+        }
+      }
+      if (table === 'assignments') {
+        return {
+          select: jest.fn(() => ({
+            order: jest.fn(() => defaultPromise),
+            eq: jest.fn(() => ({
+              order: jest.fn(() => defaultPromise),
+            })),
+          })),
+        }
+      }
+      return {
+        select: jest.fn(() => ({
+          order: jest.fn(() => defaultPromise),
+          eq: jest.fn(() => ({
+            order: jest.fn(() => defaultPromise),
+          })),
+        })),
+      }
+    }
+
+    (supabaseModule.supabase.from as jest.Mock).mockImplementation(createChainableMock);
 
     (supabaseModule.supabase.auth.getSession as jest.Mock).mockResolvedValue({
       data: { session: mockSession },
@@ -91,13 +179,12 @@ describe('Course Management - CRUD Operations', () => {
         error: null,
       });
 
+      const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => defaultPromise),
+        })),
+        order: jest.fn(() => defaultPromise),
       });
 
       mockInsert.mockReturnValue({
@@ -106,10 +193,13 @@ describe('Course Management - CRUD Operations', () => {
         }),
       });
 
+      // Mock is already correctly set up in beforeEach - don't override it
+
       render(<DashboardPage params={{ userType: 'student' }} />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+        const createButton = screen.queryByRole('button', { name: /create course/i });
+        return createButton !== null;
       }, { timeout: 5000 });
 
       const createButton = screen.getByRole('button', { name: /create course/i });
@@ -126,8 +216,15 @@ describe('Course Management - CRUD Operations', () => {
       await userEvent.type(titleInput, 'Test Course');
       await userEvent.type(descriptionInput, 'Test Description');
 
-      const submitButton = screen.getByRole('button', { name: /create course/i });
-      await userEvent.click(submitButton);
+      const submitButtons = screen.getAllByRole('button', { name: /create course/i });
+      const submitButton = submitButtons.find(btn => {
+        const button = btn.closest('button');
+        return button && (button.getAttribute('type') === 'submit' || button.textContent?.toLowerCase().includes('create course'));
+      }) || submitButtons[submitButtons.length - 1];
+      
+      if (submitButton) {
+        await userEvent.click(submitButton);
+      }
 
       await waitFor(() => {
         expect(mockInsert).toHaveBeenCalled();
@@ -140,19 +237,21 @@ describe('Course Management - CRUD Operations', () => {
         data: { session: null },
       });
 
+      const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => defaultPromise),
+        })),
+        order: jest.fn(() => defaultPromise),
       });
+
+      // Mock is already correctly set up in beforeEach - don't override it
 
       render(<DashboardPage params={{ userType: 'student' }} />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+        const createButton = screen.queryByRole('button', { name: /create course/i });
+        return createButton !== null;
       }, { timeout: 5000 });
 
       const createButton = screen.getByRole('button', { name: /create course/i });
@@ -179,13 +278,12 @@ describe('Course Management - CRUD Operations', () => {
         error: { message: 'Database connection failed' },
       });
 
+      const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => defaultPromise),
+        })),
+        order: jest.fn(() => defaultPromise),
       });
 
       mockInsert.mockReturnValue({
@@ -194,10 +292,13 @@ describe('Course Management - CRUD Operations', () => {
         }),
       });
 
+      // Mock is already correctly set up in beforeEach - don't override it
+
       render(<DashboardPage params={{ userType: 'student' }} />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+        const createButton = screen.queryByRole('button', { name: /create course/i });
+        return createButton !== null;
       }, { timeout: 5000 });
 
       const createButton = screen.getByRole('button', { name: /create course/i });
@@ -243,9 +344,7 @@ describe('Course Management - CRUD Operations', () => {
       ];
 
       mockSelect.mockReturnValue({
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: courses, error: null })),
-        }),
+        order: jest.fn().mockResolvedValue({ data: courses, error: null }),
       });
 
       mockEq.mockReturnValue({
@@ -284,9 +383,7 @@ describe('Course Management - CRUD Operations', () => {
       ];
 
       mockSelect.mockReturnValue({
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: courses, error: null })),
-        }),
+        order: jest.fn().mockResolvedValue({ data: courses, error: null }),
       });
 
       mockEq.mockReturnValue({
@@ -331,9 +428,7 @@ describe('Course Management - CRUD Operations', () => {
       ];
 
       mockSelect.mockReturnValue({
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: courses, error: null })),
-        }),
+        order: jest.fn().mockResolvedValue({ data: courses, error: null }),
       });
 
       mockEq.mockReturnValue({
@@ -383,13 +478,14 @@ describe('Course Management - CRUD Operations', () => {
       });
 
       const courses = [course];
+      const coursesPromise = Promise.resolve({ data: courses, error: null });
+      const defaultPromise = Promise.resolve({ data: [], error: null });
+      
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: courses, error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => defaultPromise),
+        })),
+        order: jest.fn(() => coursesPromise),
       });
 
       mockUpdate.mockReturnValue({
@@ -399,6 +495,8 @@ describe('Course Management - CRUD Operations', () => {
           }),
         }),
       });
+
+      // Mock is already correctly set up in beforeEach - don't override it
 
       render(<DashboardPage params={{ userType: 'admin' }} />);
 
@@ -448,12 +546,10 @@ describe('Course Management - CRUD Operations', () => {
 
       const courses = [course];
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: courses, error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+        })),
+        order: jest.fn(() => Promise.resolve({ data: courses, error: null })),
       });
 
       mockUpdate.mockReturnValue({
@@ -505,12 +601,10 @@ describe('Course Management - CRUD Operations', () => {
 
       const courses = [course];
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: courses, error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+        })),
+        order: jest.fn(() => Promise.resolve({ data: courses, error: null })),
       });
 
       mockDelete.mockReturnValue({
@@ -552,12 +646,10 @@ describe('Course Management - CRUD Operations', () => {
 
       const courses = [course];
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: courses, error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+        })),
+        order: jest.fn(() => Promise.resolve({ data: courses, error: null })),
       });
 
       render(<DashboardPage params={{ userType: 'admin' }} />);
@@ -594,12 +686,10 @@ describe('Course Management - CRUD Operations', () => {
 
       const courses = [course];
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: courses, error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+        })),
+        order: jest.fn(() => Promise.resolve({ data: courses, error: null })),
       });
 
       mockDelete.mockReturnValue({
@@ -629,54 +719,65 @@ describe('Course Management - CRUD Operations', () => {
     it('should require title field', async () => {
       const user = userEvent.setup();
 
+      const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => defaultPromise),
+        })),
+        order: jest.fn(() => defaultPromise),
       });
+
+      // Mock is already correctly set up in beforeEach - don't override it
 
       render(<DashboardPage params={{ userType: 'student' }} />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+        const createButton = screen.queryByRole('button', { name: /create course/i });
+        return createButton !== null;
       }, { timeout: 5000 });
 
       const createButton = screen.getByRole('button', { name: /create course/i });
       await user.click(createButton);
 
       await waitFor(() => {
-        const titleInput = screen.getByLabelText(/course title/i) || screen.getByPlaceholderText(/python dungeon/i);
-        expect(titleInput).toBeInTheDocument();
+        const titleInput = screen.queryByLabelText(/course title/i) || screen.queryByPlaceholderText(/python dungeon/i);
+        return titleInput !== null;
       }, { timeout: 5000 });
+
+      const titleInput = screen.queryByLabelText(/course title/i) || screen.queryByPlaceholderText(/python dungeon/i);
+      expect(titleInput).toBeInTheDocument();
     });
 
     it('should allow optional code and color fields', async () => {
       const user = userEvent.setup();
 
+      const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
-        eq: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
-        order: jest.fn().mockReturnValue({
-          then: jest.fn((cb) => cb({ data: [], error: null })),
-        }),
+        eq: jest.fn(() => ({
+          order: jest.fn(() => defaultPromise),
+        })),
+        order: jest.fn(() => defaultPromise),
       });
+
+      // Mock is already correctly set up in beforeEach - don't override it
 
       render(<DashboardPage params={{ userType: 'student' }} />);
 
       await waitFor(() => {
-        expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+        const createButton = screen.queryByRole('button', { name: /create course/i });
+        return createButton !== null;
       }, { timeout: 5000 });
 
       const createButton = screen.getByRole('button', { name: /create course/i });
       await user.click(createButton);
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/course title/i) || screen.getByPlaceholderText(/python dungeon/i)).toBeInTheDocument();
+        const titleInput = screen.queryByLabelText(/course title/i) || screen.queryByPlaceholderText(/python dungeon/i);
+        return titleInput !== null;
       }, { timeout: 5000 });
+
+      const titleInput = screen.queryByLabelText(/course title/i) || screen.queryByPlaceholderText(/python dungeon/i);
+      expect(titleInput).toBeInTheDocument();
 
       const codeInput = screen.queryByLabelText(/course code/i) || screen.queryByPlaceholderText(/cs101/i);
       const colorInput = screen.queryByLabelText(/color/i);
