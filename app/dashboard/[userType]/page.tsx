@@ -96,11 +96,15 @@ export default function DashboardPage({ params }: { params: { userType: string }
     due_date_to: ''
   })
 
+  // My created courses (for students)
+  const [myCreatedCourses, setMyCreatedCourses] = useState<Course[]>([])
+
   useEffect(() => {
     checkUser()
     if (userType === 'student') {
       loadEnrolledCourses()
       loadCourses() // Load courses for assignment dropdown
+      loadMyCreatedCourses() // Load courses for deletion
       loadAssignments()
     } else if (userType === 'admin') {
       loadCourses()
@@ -168,6 +172,25 @@ export default function DashboardPage({ params }: { params: { userType: string }
       setDbError(errorMsg)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadMyCreatedCourses = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      // Load all courses (since there's no created_by field, we show all courses)
+      // Users can delete any course they have access to (RLS will handle permissions)
+      const { data, error } = await supabase
+        .from('courses')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setMyCreatedCourses(data || [])
+    } catch (error: any) {
+      console.error('Error loading my created courses:', error.message)
     }
   }
 
@@ -336,7 +359,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
   }
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm('Are you sure you want to delete this course? This will also delete all enrollments.')) {
+    if (!confirm('Are you sure you want to delete this course? This will also delete all enrollments and assignments.')) {
       return
     }
 
@@ -349,11 +372,38 @@ export default function DashboardPage({ params }: { params: { userType: string }
       if (error) throw error
 
       setCourses(courses.filter(c => c.id !== courseId))
+      // Also remove from enrolled courses if it's there
+      setEnrolledCourses(enrolledCourses.filter(e => e.course_id !== courseId))
+      setMyCreatedCourses(myCreatedCourses.filter(c => c.id !== courseId))
       loadStats()
+      if (userType === 'student') {
+        loadMyCreatedCourses() // Reload to refresh the list
+      }
       setNotification({ message: 'Course deleted successfully!', type: 'success' })
     } catch (error: any) {
       console.error('Error deleting course:', error.message)
       setNotification({ message: 'Failed to delete course: ' + error.message, type: 'error' })
+    }
+  }
+
+  const handleDeleteAssignment = async (assignmentId: string) => {
+    if (!confirm('Are you sure you want to delete this assignment? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('assignments')
+        .delete()
+        .eq('id', assignmentId)
+
+      if (error) throw error
+
+      setAssignments(assignments.filter(a => a.id !== assignmentId))
+      setNotification({ message: 'Assignment deleted successfully!', type: 'success' })
+    } catch (error: any) {
+      console.error('Error deleting assignment:', error.message)
+      setNotification({ message: 'Failed to delete assignment: ' + error.message, type: 'error' })
     }
   }
 
@@ -646,7 +696,7 @@ export default function DashboardPage({ params }: { params: { userType: string }
               <div className="p-2 bg-primary-500/20 rounded-lg">
                 <BookOpen className="w-6 h-6 text-primary-500" />
               </div>
-              <h1 className="text-2xl font-bold text-light">Study Planner</h1>
+              <h1 className="text-2xl font-bold text-light">Study Quest</h1>
             </div>
             <div className="flex items-center gap-2">
               {userType === 'student' && (
@@ -864,6 +914,65 @@ export default function DashboardPage({ params }: { params: { userType: string }
                   </div>
                 )}
               </div>
+
+              {/* My Created Courses Section */}
+              {myCreatedCourses.length > 0 && (
+                <div>
+                  <h3 className="text-2xl font-bold text-light mb-6 flex items-center gap-3">
+                    <BookOpen className="w-6 h-6 text-primary-500" />
+                    My Created Courses
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {myCreatedCourses.map((course) => (
+                      <div
+                        key={course.id}
+                        className="group bg-dark-navy/60 backdrop-blur-sm border-2 border-primary-500/20 rounded-2xl p-6 hover:border-primary-500/50 hover:shadow-xl transition-all transform hover:scale-[1.02]"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="text-lg font-bold text-light">{course.title}</h4>
+                            </div>
+                            <p className="text-light/70 text-sm mb-4 line-clamp-2">{course.description}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${
+                              course.difficulty === 'beginner' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                              course.difficulty === 'intermediate' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                              'bg-accent/20 text-accent border-accent/30'
+                            }`}>
+                              {course.difficulty}
+                            </span>
+                            {course.category && (
+                              <span className="px-3 py-1 text-xs font-semibold rounded-full bg-primary-500/20 text-primary-400 border border-primary-500/30">
+                                {course.category}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openEditModal(course)}
+                              className="text-primary-400 hover:text-primary-300 p-2 hover:bg-primary-500/20 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCourse(course.id)}
+                              className="text-red-400 hover:text-red-300 p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Assignments Section */}
               <div>
@@ -1088,12 +1197,21 @@ export default function DashboardPage({ params }: { params: { userType: string }
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-3">
                                   <button
                                     onClick={() => router.push(`/assignments/${assignment.id}`)}
                                     className="text-sm text-primary-400 hover:text-primary-300 font-medium transition-colors"
                                   >
                                     View Details
                                   </button>
+                                    <button
+                                      onClick={() => handleDeleteAssignment(assignment.id)}
+                                      className="text-sm text-red-400 hover:text-red-300 font-medium transition-colors"
+                                      title="Delete Assignment"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             )
@@ -1328,12 +1446,21 @@ export default function DashboardPage({ params }: { params: { userType: string }
                                 <p className="text-light/70 text-sm mb-4 line-clamp-2">{assignment.description}</p>
                               )}
                             </div>
+                            <div className="flex items-center gap-2">
                             <button
                               onClick={() => router.push(`/assignments/${assignment.id}`)}
                               className="text-sm text-primary-400 hover:text-primary-300 font-medium transition-colors"
                             >
                               View Details →
                             </button>
+                              <button
+                                onClick={() => handleDeleteAssignment(assignment.id)}
+                                className="text-red-400 hover:text-red-300 p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                                title="Delete Assignment"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                           
                           <div className={`mt-4 p-3 rounded-xl ${
@@ -1399,8 +1526,9 @@ export default function DashboardPage({ params }: { params: { userType: string }
 
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-light/90 mb-2">Course Title</label>
+                  <label htmlFor="course-title" className="block text-sm font-medium text-light/90 mb-2">Course Title</label>
                   <input
+                    id="course-title"
                     type="text"
                     value={courseForm.title}
                     onChange={(e) => setCourseForm({ ...courseForm, title: e.target.value })}
@@ -1410,8 +1538,9 @@ export default function DashboardPage({ params }: { params: { userType: string }
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-light/90 mb-2">Description</label>
+                  <label htmlFor="course-description" className="block text-sm font-medium text-light/90 mb-2">Description</label>
                   <textarea
+                    id="course-description"
                     value={courseForm.description}
                     onChange={(e) => setCourseForm({ ...courseForm, description: e.target.value })}
                     rows={4}

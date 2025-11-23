@@ -141,9 +141,9 @@ CREATE POLICY "Only admins can update assignments"
   ON assignments FOR UPDATE
   USING (is_admin(auth.uid()));
 
-CREATE POLICY "Only admins can delete assignments"
+CREATE POLICY "Authenticated users can delete assignments"
   ON assignments FOR DELETE
-  USING (is_admin(auth.uid()));
+  USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Users can view their own submissions"
   ON assignment_submissions FOR SELECT
