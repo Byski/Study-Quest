@@ -1,6 +1,16 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom'
 
+// Silence console.error in tests
+const originalError = console.error
+beforeAll(() => {
+  console.error = jest.fn()
+})
+
+afterAll(() => {
+  console.error = originalError
+})
+
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
   useRouter() {

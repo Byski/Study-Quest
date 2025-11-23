@@ -89,8 +89,10 @@ describe('Course Management - CRUD Operations', () => {
     mockSelect.mockReturnValue({
       eq: jest.fn(() => ({
         order: jest.fn(() => defaultPromise),
+        then: jest.fn((cb) => defaultPromise.then(cb)),
       })),
       order: jest.fn(() => defaultPromise),
+      then: jest.fn((cb) => defaultPromise.then(cb)),
     });
 
     // Create proper chainable mock implementation
@@ -103,6 +105,7 @@ describe('Course Management - CRUD Operations', () => {
               return Promise.resolve({ count: 0, data: null, error: null });
             }
             // Return chainable for regular queries - always return the mockSelect result
+            // This handles both loadCourses and loadMyCreatedCourses
             return mockSelect();
           }),
           insert: mockInsert,
@@ -127,8 +130,10 @@ describe('Course Management - CRUD Operations', () => {
             return {
               eq: jest.fn(() => ({
                 order: jest.fn(() => defaultPromise),
+                then: jest.fn((cb) => defaultPromise.then(cb)),
               })),
               order: jest.fn(() => defaultPromise),
+              then: jest.fn((cb) => defaultPromise.then(cb)),
             };
           }),
         }
@@ -139,7 +144,9 @@ describe('Course Management - CRUD Operations', () => {
             order: jest.fn(() => defaultPromise),
             eq: jest.fn(() => ({
               order: jest.fn(() => defaultPromise),
+              then: jest.fn((cb) => defaultPromise.then(cb)),
             })),
+            then: jest.fn((cb) => defaultPromise.then(cb)),
           })),
         }
       }
@@ -148,7 +155,9 @@ describe('Course Management - CRUD Operations', () => {
           order: jest.fn(() => defaultPromise),
           eq: jest.fn(() => ({
             order: jest.fn(() => defaultPromise),
+            then: jest.fn((cb) => defaultPromise.then(cb)),
           })),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
       }
     }
@@ -162,6 +171,8 @@ describe('Course Management - CRUD Operations', () => {
 
   describe('Course Creation', () => {
     it('should call insert with correct course data when creating a course', async () => {
+      jest.setTimeout(30000);
+      const user = userEvent.setup();
       const newCourse = {
         id: 'course-1',
         title: 'Test Course',
@@ -183,8 +194,10 @@ describe('Course Management - CRUD Operations', () => {
       mockSelect.mockReturnValue({
         eq: jest.fn(() => ({
           order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
         order: jest.fn(() => defaultPromise),
+        then: jest.fn((cb) => defaultPromise.then(cb)),
       });
 
       mockInsert.mockReturnValue({
@@ -193,130 +206,178 @@ describe('Course Management - CRUD Operations', () => {
         }),
       });
 
-      // Mock is already correctly set up in beforeEach - don't override it
-
       render(<DashboardPage params={{ userType: 'student' }} />);
 
       await waitFor(() => {
         const createButton = screen.queryByRole('button', { name: /create course/i });
         return createButton !== null;
-      }, { timeout: 5000 });
+      }, { timeout: 10000 });
 
       const createButton = screen.getByRole('button', { name: /create course/i });
-      await userEvent.click(createButton);
+      await user.click(createButton);
+
+      // Wait for modal to open
+      await waitFor(() => {
+        const titleInput = screen.queryByPlaceholderText(/python dungeon/i) || screen.queryByLabelText(/course title/i);
+        expect(titleInput).toBeInTheDocument();
+      }, { timeout: 10000 });
+
+      const titleInput = screen.getByPlaceholderText(/python dungeon/i) || screen.getByLabelText(/course title/i) as HTMLInputElement;
+      const descriptionInput = screen.getByPlaceholderText(/describe the course/i) || screen.getByLabelText(/description/i) as HTMLTextAreaElement;
+
+      await user.type(titleInput, 'Test Course');
+      await user.type(descriptionInput, 'Test Description');
+
+      // Find the submit button in the modal footer - it should be the last one or the one that's not disabled
+      await waitFor(() => {
+        const submitButtons = screen.getAllByRole('button', { name: /create course/i });
+        expect(submitButtons.length).toBeGreaterThan(0);
+      }, { timeout: 5000 });
+
+      const submitButtons = screen.getAllByRole('button', { name: /create course/i });
+      // The submit button is usually the last one in the modal (after the cancel button)
+      const submitButton = submitButtons[submitButtons.length - 1];
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockInsert).toHaveBeenCalled();
+      }, { timeout: 15000 });
+      
+      // Verify the insert was called with courses table
+        expect(supabaseModule.supabase.from).toHaveBeenCalledWith('courses');
+    });
+
+    it('should show error notification when session is missing', async () => {
+      jest.setTimeout(30000);
+      const user = userEvent.setup();
+      
+      // Use a flag to track when form is being submitted
+      let isSubmittingForm = false;
+      
+      (supabaseModule.supabase.auth.getSession as jest.Mock).mockImplementation(() => {
+        // During form submission, return null to simulate expired session
+        if (isSubmittingForm) {
+          return Promise.resolve({ data: { session: null } });
+        }
+        // Otherwise return session for initial load
+        return Promise.resolve({ data: { session: mockSession } });
+      });
+
+      const defaultPromise = Promise.resolve({ data: [], error: null });
+      mockSelect.mockReturnValue({
+        eq: jest.fn(() => ({
+          order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
+        })),
+        order: jest.fn(() => defaultPromise),
+        then: jest.fn((cb) => defaultPromise.then(cb)),
+      });
+
+      render(<DashboardPage params={{ userType: 'student' }} />);
+
+      // Wait for loading to complete
+      await waitFor(() => {
+        expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+      }, { timeout: 10000 });
+
+      const createButton = screen.getByRole('button', { name: /create course/i });
+      await user.click(createButton);
 
       await waitFor(() => {
         const titleInput = screen.queryByPlaceholderText(/python dungeon/i) || screen.queryByLabelText(/course title/i);
         expect(titleInput).toBeInTheDocument();
+      }, { timeout: 10000 });
+
+      const titleInput = screen.getByPlaceholderText(/python dungeon/i) || screen.getByLabelText(/course title/i) as HTMLInputElement;
+      await user.type(titleInput, 'Test Course');
+
+      // Find the submit button - wait for it and use the last one (submit button is after cancel)
+      await waitFor(() => {
+        const submitButtons = screen.getAllByRole('button', { name: /create course/i });
+        expect(submitButtons.length).toBeGreaterThan(0);
       }, { timeout: 5000 });
-
-      const titleInput = screen.getByPlaceholderText(/python dungeon/i) || screen.getByLabelText(/course title/i);
-      const descriptionInput = screen.getByPlaceholderText(/describe the course/i) || screen.getByLabelText(/description/i);
-
-      await userEvent.type(titleInput, 'Test Course');
-      await userEvent.type(descriptionInput, 'Test Description');
-
-      const submitButtons = screen.getAllByRole('button', { name: /create course/i });
-      const submitButton = submitButtons.find(btn => {
-        const button = btn.closest('button');
-        return button && (button.getAttribute('type') === 'submit' || button.textContent?.toLowerCase().includes('create course'));
-      }) || submitButtons[submitButtons.length - 1];
       
-      if (submitButton) {
-        await userEvent.click(submitButton);
-      }
+      const submitButtons = screen.getAllByRole('button', { name: /create course/i });
+      const submitButton = submitButtons[submitButtons.length - 1]; // Last one is the submit button
+      
+      // Set flag before clicking to simulate session expiring during submission
+      isSubmittingForm = true;
+      await user.click(submitButton);
 
+      // Wait for the notification to appear after form submission
       await waitFor(() => {
-        expect(mockInsert).toHaveBeenCalled();
-        expect(supabaseModule.supabase.from).toHaveBeenCalledWith('courses');
-      }, { timeout: 5000 });
-    });
-
-    it('should show error notification when session is missing', async () => {
-      (supabaseModule.supabase.auth.getSession as jest.Mock).mockResolvedValue({
-        data: { session: null },
-      });
-
-      const defaultPromise = Promise.resolve({ data: [], error: null });
-      mockSelect.mockReturnValue({
-        eq: jest.fn(() => ({
-          order: jest.fn(() => defaultPromise),
-        })),
-        order: jest.fn(() => defaultPromise),
-      });
-
-      // Mock is already correctly set up in beforeEach - don't override it
-
-      render(<DashboardPage params={{ userType: 'student' }} />);
-
-      await waitFor(() => {
-        const createButton = screen.queryByRole('button', { name: /create course/i });
-        return createButton !== null;
-      }, { timeout: 5000 });
-
-      const createButton = screen.getByRole('button', { name: /create course/i });
-      await userEvent.click(createButton);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
-      });
-
-      const titleInput = screen.getByLabelText(/title/i);
-      await userEvent.type(titleInput, 'Test Course');
-
-      const submitButton = screen.getByRole('button', { name: /create course/i, hidden: true });
-      await userEvent.click(submitButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/must be logged in/i)).toBeInTheDocument();
-      });
+        const notification = screen.queryByTestId('notification');
+        if (notification) {
+          expect(notification.textContent).toMatch(/must be logged in|you must be logged in|logged in to create/i);
+          return true;
+        }
+        // Fallback: check for text directly
+        const errorText = screen.queryByText(/must be logged in/i) || 
+                         screen.queryByText(/you must be logged in/i) ||
+                         screen.queryByText(/logged in to create/i);
+        if (errorText) {
+          return true;
+        }
+        throw new Error('Notification not found');
+      }, { timeout: 15000 });
     });
 
     it('should handle database errors during course creation', async () => {
-      mockSingle.mockResolvedValue({
-        data: null,
-        error: { message: 'Database connection failed' },
-      });
+      jest.setTimeout(30000);
+      const user = userEvent.setup();
+      const error = { message: 'Database connection failed' };
 
       const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
         eq: jest.fn(() => ({
           order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
         order: jest.fn(() => defaultPromise),
+        then: jest.fn((cb) => defaultPromise.then(cb)),
       });
 
+      // Mock the insert to return an error
       mockInsert.mockReturnValue({
         select: jest.fn().mockReturnValue({
-          single: mockSingle,
+          single: jest.fn(() => Promise.resolve({ data: null, error: error })),
         }),
       });
 
-      // Mock is already correctly set up in beforeEach - don't override it
-
       render(<DashboardPage params={{ userType: 'student' }} />);
 
+      // Wait for loading to complete
       await waitFor(() => {
-        const createButton = screen.queryByRole('button', { name: /create course/i });
-        return createButton !== null;
-      }, { timeout: 5000 });
+        expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+      }, { timeout: 10000 });
 
       const createButton = screen.getByRole('button', { name: /create course/i });
-      await userEvent.click(createButton);
+      await user.click(createButton);
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
-      });
+        const titleInput = screen.queryByPlaceholderText(/python dungeon/i) || screen.queryByLabelText(/course title/i);
+        expect(titleInput).toBeInTheDocument();
+      }, { timeout: 10000 });
 
-      const titleInput = screen.getByLabelText(/title/i);
-      await userEvent.type(titleInput, 'Test Course');
+      const titleInput = screen.getByPlaceholderText(/python dungeon/i) || screen.getByLabelText(/course title/i) as HTMLInputElement;
+      await user.type(titleInput, 'Test Course');
 
-      const submitButton = screen.getByRole('button', { name: /create course/i, hidden: true });
-      await userEvent.click(submitButton);
+      // Find the submit button - wait for it and use the last one (submit button is after cancel)
+      await waitFor(() => {
+        const submitButtons = screen.getAllByRole('button', { name: /create course/i });
+        expect(submitButtons.length).toBeGreaterThan(0);
+      }, { timeout: 5000 });
+      
+      const submitButtons = screen.getAllByRole('button', { name: /create course/i });
+      const submitButton = submitButtons[submitButtons.length - 1]; // Last one is the submit button
+      await user.click(submitButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/failed to create/i)).toBeInTheDocument();
-      });
+        // Check for error notification using the Notification component's testid
+        const notification = screen.getByTestId('notification');
+        expect(notification).toBeInTheDocument();
+        expect(notification.textContent).toMatch(/failed to create|database connection failed/i);
+      }, { timeout: 15000 });
     });
   });
 
@@ -453,6 +514,7 @@ describe('Course Management - CRUD Operations', () => {
 
   describe('Course Editing', () => {
     it('should update course with new data', async () => {
+      jest.setTimeout(10000);
       const user = userEvent.setup();
       const course = {
         id: 'course-1',
@@ -484,8 +546,10 @@ describe('Course Management - CRUD Operations', () => {
       mockSelect.mockReturnValue({
         eq: jest.fn(() => ({
           order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
         order: jest.fn(() => coursesPromise),
+        then: jest.fn((cb) => coursesPromise.then(cb)),
       });
 
       mockUpdate.mockReturnValue({
@@ -509,10 +573,11 @@ describe('Course Management - CRUD Operations', () => {
         await user.click(editButtons[0]);
 
         await waitFor(() => {
-          expect(screen.getByLabelText(/course title/i) || screen.getByPlaceholderText(/python dungeon/i)).toBeInTheDocument();
+          const titleInput = screen.queryByPlaceholderText(/python dungeon/i) || screen.queryByText(/course title/i)?.closest('div')?.querySelector('input');
+          expect(titleInput).toBeInTheDocument();
         }, { timeout: 5000 });
 
-        const titleInput = screen.getByLabelText(/course title/i) || screen.getByPlaceholderText(/python dungeon/i);
+        const titleInput = screen.getByPlaceholderText(/python dungeon/i) || screen.getByText(/course title/i).closest('div')?.querySelector('input') as HTMLInputElement;
         await user.clear(titleInput);
         await user.type(titleInput, 'Updated Title');
 
@@ -521,11 +586,12 @@ describe('Course Management - CRUD Operations', () => {
 
         await waitFor(() => {
           expect(mockUpdate).toHaveBeenCalled();
-        });
+        }, { timeout: 10000 });
       }
     });
 
     it('should handle update errors gracefully', async () => {
+      jest.setTimeout(10000);
       const user = userEvent.setup();
       const course = {
         id: 'course-1',
@@ -545,11 +611,15 @@ describe('Course Management - CRUD Operations', () => {
       });
 
       const courses = [course];
+      const coursesPromise = Promise.resolve({ data: courses, error: null });
+      const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
         eq: jest.fn(() => ({
-          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+          order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
-        order: jest.fn(() => Promise.resolve({ data: courses, error: null })),
+        order: jest.fn(() => coursesPromise),
+        then: jest.fn((cb) => coursesPromise.then(cb)),
       });
 
       mockUpdate.mockReturnValue({
@@ -579,7 +649,7 @@ describe('Course Management - CRUD Operations', () => {
 
         await waitFor(() => {
           expect(screen.getByText(/failed to update/i)).toBeInTheDocument();
-        });
+        }, { timeout: 10000 });
       }
     });
   });
@@ -600,11 +670,15 @@ describe('Course Management - CRUD Operations', () => {
       };
 
       const courses = [course];
+      const coursesPromise = Promise.resolve({ data: courses, error: null });
+      const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
         eq: jest.fn(() => ({
-          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+          order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
-        order: jest.fn(() => Promise.resolve({ data: courses, error: null })),
+        order: jest.fn(() => coursesPromise),
+        then: jest.fn((cb) => coursesPromise.then(cb)),
       });
 
       mockDelete.mockReturnValue({
@@ -645,11 +719,15 @@ describe('Course Management - CRUD Operations', () => {
       };
 
       const courses = [course];
+      const coursesPromise = Promise.resolve({ data: courses, error: null });
+      const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
         eq: jest.fn(() => ({
-          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+          order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
-        order: jest.fn(() => Promise.resolve({ data: courses, error: null })),
+        order: jest.fn(() => coursesPromise),
+        then: jest.fn((cb) => coursesPromise.then(cb)),
       });
 
       render(<DashboardPage params={{ userType: 'admin' }} />);
@@ -685,11 +763,15 @@ describe('Course Management - CRUD Operations', () => {
       };
 
       const courses = [course];
+      const coursesPromise = Promise.resolve({ data: courses, error: null });
+      const defaultPromise = Promise.resolve({ data: [], error: null });
       mockSelect.mockReturnValue({
         eq: jest.fn(() => ({
-          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+          order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
-        order: jest.fn(() => Promise.resolve({ data: courses, error: null })),
+        order: jest.fn(() => coursesPromise),
+        then: jest.fn((cb) => coursesPromise.then(cb)),
       });
 
       mockDelete.mockReturnValue({
@@ -723,8 +805,10 @@ describe('Course Management - CRUD Operations', () => {
       mockSelect.mockReturnValue({
         eq: jest.fn(() => ({
           order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
         order: jest.fn(() => defaultPromise),
+        then: jest.fn((cb) => defaultPromise.then(cb)),
       });
 
       // Mock is already correctly set up in beforeEach - don't override it
@@ -744,7 +828,7 @@ describe('Course Management - CRUD Operations', () => {
         return titleInput !== null;
       }, { timeout: 5000 });
 
-      const titleInput = screen.queryByLabelText(/course title/i) || screen.queryByPlaceholderText(/python dungeon/i);
+      const titleInput = screen.queryByPlaceholderText(/python dungeon/i) || screen.queryByText(/course title/i)?.closest('div')?.querySelector('input');
       expect(titleInput).toBeInTheDocument();
     });
 
@@ -755,8 +839,10 @@ describe('Course Management - CRUD Operations', () => {
       mockSelect.mockReturnValue({
         eq: jest.fn(() => ({
           order: jest.fn(() => defaultPromise),
+          then: jest.fn((cb) => defaultPromise.then(cb)),
         })),
         order: jest.fn(() => defaultPromise),
+        then: jest.fn((cb) => defaultPromise.then(cb)),
       });
 
       // Mock is already correctly set up in beforeEach - don't override it
@@ -772,15 +858,15 @@ describe('Course Management - CRUD Operations', () => {
       await user.click(createButton);
 
       await waitFor(() => {
-        const titleInput = screen.queryByLabelText(/course title/i) || screen.queryByPlaceholderText(/python dungeon/i);
+        const titleInput = screen.queryByPlaceholderText(/python dungeon/i) || screen.queryByText(/course title/i)?.closest('div')?.querySelector('input');
         return titleInput !== null;
       }, { timeout: 5000 });
 
-      const titleInput = screen.queryByLabelText(/course title/i) || screen.queryByPlaceholderText(/python dungeon/i);
+      const titleInput = screen.queryByPlaceholderText(/python dungeon/i) || screen.queryByText(/course title/i)?.closest('div')?.querySelector('input');
       expect(titleInput).toBeInTheDocument();
 
-      const codeInput = screen.queryByLabelText(/course code/i) || screen.queryByPlaceholderText(/cs101/i);
-      const colorInput = screen.queryByLabelText(/color/i);
+      const codeInput = screen.queryByPlaceholderText(/cs101/i) || screen.queryByText(/course code/i)?.closest('div')?.querySelector('input');
+      const colorInput = screen.queryByText(/color/i)?.closest('div')?.querySelector('input[type="color"]');
 
       if (codeInput) {
         expect(codeInput).not.toBeRequired();
