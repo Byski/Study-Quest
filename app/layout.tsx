@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Study Planner',
-  description: 'A study planning application',
+  title: 'Study Quest - Your Academic Adventure',
+  description: 'Transform your studies into an epic quest. Manage courses, track assignments, and level up your academic journey.',
 };
 
 export default function RootLayout({
